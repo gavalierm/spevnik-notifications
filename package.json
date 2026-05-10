@@ -1,0 +1,28 @@
+{
+  "name": "spevnik-notifications",
+  "version": "1.0.0",
+  "description": "Spevnik unified notifications — push + email with per-recipient dedup window",
+  "type": "module",
+  "directus:extension": {
+    "type": "operation",
+    "path": {
+      "app": "dist/app.js",
+      "api": "dist/api.js"
+    },
+    "source": {
+      "app": "src/app.js",
+      "api": "src/api.js"
+    },
+    "host": "^11.0.0"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@directus/extensions-sdk": "^17.1.0"
+  },
+  "scripts": {
+    "build": "npx directus-extension build",
+    "dev": "npx directus-extension build --watch"
+  }
+}
