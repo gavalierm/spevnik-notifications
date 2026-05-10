@@ -1,15 +1,5 @@
 // src/lib/templates/push.js — krátke jednoradové notif body pre web push.
 
-const TITLES = {
-	band_create: (band) => band.title,
-	setlist_create: (band) => band.title,
-	setlist_update: (band) => band.title,
-	setlist_attendance_invited: (band) => band.title,
-	setlist_attendance_responded: (band) => band.title,
-	song_create: (band) => band.title,
-	song_update: (band) => band.title,
-};
-
 const BODIES = {
 	band_create: (entity) => `Nová kapela: ${entity.title}`,
 	setlist_create: (entity) => `Nový setlist: ${entity.title || 'bez názvu'}`,
@@ -33,7 +23,7 @@ const BODIES = {
  */
 export function buildPushPayload(eventKey, band, entity, ctx) {
 	return {
-		title: TITLES[eventKey]?.(band) ?? 'Spevník',
+		title: band?.title ?? 'Spevník',
 		body: BODIES[eventKey]?.(entity, ctx) ?? '',
 		url: '/notifications',
 		icon: '/img/fav/android-chrome-192x192.png',

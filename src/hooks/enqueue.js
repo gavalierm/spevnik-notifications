@@ -4,7 +4,7 @@
 // Hook je after-commit (action), takže entity_id je vždy známe.
 
 import { COLLECTIONS_WATCHED } from '../lib/constants.js';
-import { mapToEventKey, resolveBandId, resolveEntityRef } from '../lib/event-mapping.js';
+import { mapToEventKey, resolveContext } from '../lib/event-mapping.js';
 
 // Idempotent schema bootstrap — runs once at extension load.
 // Indexes can't be created via Directus collections API; this is the only path
@@ -45,22 +45,22 @@ async function enqueue(database, { eventKey, bandId, entityCollection, entityId,
 
 export default ({ action }, { database, logger }) => {
 	// Fire-and-forget bootstrap — runs once on extension load.
-	ensureSchema(database, logger).catch(() => {});
+	ensureSchema(database, logger).catch(err => {
+		logger.warn(`[notif-ensureSchema] outer error: ${err.message}`);
+	});
 
 	for (const col of COLLECTIONS_WATCHED) {
 		action(`${col}.items.create`, async ({ key, payload, collection }, { accountability }) => {
 			try {
 				const eventKey = mapToEventKey(collection, 'create', payload);
 				if (!eventKey) return;
-				const bandId = await resolveBandId(database, collection, key, payload);
-				if (!bandId) return;
-				const entRef = await resolveEntityRef(database, collection, key);
-				if (!entRef) return;
+				const ctx = await resolveContext(database, collection, key, payload);
+				if (!ctx || !ctx.bandId) return;
 				await enqueue(database, {
 					eventKey,
-					bandId,
-					entityCollection: entRef.entityCollection,
-					entityId: entRef.entityId,
+					bandId: ctx.bandId,
+					entityCollection: ctx.entityCollection,
+					entityId: ctx.entityId,
 					actorId: accountability?.user,
 					payload,
 				});
@@ -74,15 +74,13 @@ export default ({ action }, { database, logger }) => {
 				const eventKey = mapToEventKey(collection, 'update', payload);
 				if (!eventKey) return;
 				for (const id of keys) {
-					const bandId = await resolveBandId(database, collection, id, payload);
-					if (!bandId) continue;
-					const entRef = await resolveEntityRef(database, collection, id);
-					if (!entRef) continue;
+					const ctx = await resolveContext(database, collection, id, payload);
+					if (!ctx || !ctx.bandId) continue;
 					await enqueue(database, {
 						eventKey,
-						bandId,
-						entityCollection: entRef.entityCollection,
-						entityId: entRef.entityId,
+						bandId: ctx.bandId,
+						entityCollection: ctx.entityCollection,
+						entityId: ctx.entityId,
 						actorId: accountability?.user,
 						payload,
 					});

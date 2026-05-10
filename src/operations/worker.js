@@ -61,9 +61,8 @@ export default {
 
 				for (const ev of keep) {
 					// Defense-in-depth: validate collection name before using as Knex table.
-					// entity_collection is written by the hook from COLLECTIONS_WATCHED, but
-					// re-validate to avoid arbitrary table access if DB ever has bad data.
-					if (!COLLECTIONS_WATCHED.includes(ev.entity_collection) && ev.entity_collection !== 'setlists') {
+					// entity_collection is written by the hook from COLLECTIONS_WATCHED.
+					if (!COLLECTIONS_WATCHED.includes(ev.entity_collection)) {
 						logger.warn(`[notif-worker] unknown entity_collection=${ev.entity_collection} ev=${ev.id}, skipping`);
 						continue;
 					}
