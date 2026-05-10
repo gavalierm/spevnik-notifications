@@ -6,6 +6,29 @@
 import { COLLECTIONS_WATCHED } from '../lib/constants.js';
 import { mapToEventKey, resolveBandId, resolveEntityRef } from '../lib/event-mapping.js';
 
+// Idempotent schema bootstrap — runs once at extension load.
+// Indexes can't be created via Directus collections API; this is the only path
+// to ensure they exist without external migration tooling. CREATE INDEX
+// IF NOT EXISTS is no-op on subsequent loads, so it's safe to leave permanently.
+let _schemaEnsured = false;
+async function ensureSchema(database, logger) {
+	if (_schemaEnsured) return;
+	_schemaEnsured = true;
+	const statements = [
+		"CREATE INDEX IF NOT EXISTS idx_notif_events_unprocessed ON notification_events (created_at) WHERE processed_at IS NULL",
+		"CREATE INDEX IF NOT EXISTS idx_notif_sent_dedup ON notification_sent_log (user_id, band_id, entity_collection, entity_id, channel, sent_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_directus_users_notifications_gin ON directus_users USING GIN ((settings::jsonb -> 'notifications' -> 'bands'))",
+	];
+	for (const sql of statements) {
+		try {
+			await database.raw(sql);
+		} catch (err) {
+			logger.warn(`[notif-ensureSchema] failed: ${err.message} sql=${sql.slice(0, 80)}`);
+		}
+	}
+	logger.info('[notif-ensureSchema] notification indexes verified');
+}
+
 async function enqueue(database, { eventKey, bandId, entityCollection, entityId, actorId, payload }) {
 	if (!eventKey || bandId == null || entityId == null) return;
 	await database('notification_events').insert({
@@ -21,6 +44,9 @@ async function enqueue(database, { eventKey, bandId, entityCollection, entityId,
 }
 
 export default ({ action }, { database, logger }) => {
+	// Fire-and-forget bootstrap — runs once on extension load.
+	ensureSchema(database, logger).catch(() => {});
+
 	for (const col of COLLECTIONS_WATCHED) {
 		action(`${col}.items.create`, async ({ key, payload, collection }, { accountability }) => {
 			try {
