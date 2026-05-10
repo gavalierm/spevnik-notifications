@@ -6,6 +6,9 @@ import { DEDUP_WINDOW_MIN } from './constants.js';
  * Bulk dedup check: pre množinu kandidátov vráti len tých ktorí PRESHLI dedup
  * (žiadny sent_log entry pre (user, band, entity, channel) v posledných 30 min).
  *
+ * Implementation: composite IN list cez Postgres VALUES + JOIN, plne parametrizované
+ * (žiadne string-interpolated SQL). Index idx_notif_sent_dedup pokrýva lookup.
+ *
  * @param {import('knex').Knex} database
  * @param {Array<{user_id, band_id, entity_collection, entity_id, channel}>} candidates
  * @returns {Promise<typeof candidates>}
@@ -15,18 +18,30 @@ export async function filterByDedup(database, candidates) {
 
 	const cutoff = new Date(Date.now() - DEDUP_WINDOW_MIN * 60 * 1000).toISOString();
 
-	// Build composite WHERE: (uid, bid, ecol, eid, chan) tuples. Postgres supports
-	// row constructor IN with multiple columns; Knex needs raw bindings for clarity.
-	const tuples = candidates.map(c =>
-		`('${c.user_id}',${c.band_id},'${c.entity_collection}',${c.entity_id},'${c.channel}')`
-	).join(',');
+	// Build VALUES clause with placeholders only (5 placeholders per row).
+	const placeholders = candidates.map(() => '(?::uuid, ?::int, ?::text, ?::int, ?::text)').join(',');
+	const bindings = [];
+	for (const c of candidates) {
+		bindings.push(c.user_id, c.band_id, c.entity_collection, c.entity_id, c.channel);
+	}
 
-	const blocked = await database.raw(`
-		SELECT user_id, band_id, entity_collection, entity_id, channel
-		FROM notification_sent_log
-		WHERE sent_at > ?
-		  AND (user_id, band_id, entity_collection, entity_id, channel) IN (${tuples})
-	`, [cutoff]);
+	const sql = `
+		WITH input(user_id, band_id, entity_collection, entity_id, channel) AS (
+			VALUES ${placeholders}
+		)
+		SELECT i.user_id, i.band_id, i.entity_collection, i.entity_id, i.channel
+		FROM input i
+		JOIN notification_sent_log s ON
+			s.user_id = i.user_id
+			AND s.band_id = i.band_id
+			AND s.entity_collection = i.entity_collection
+			AND s.entity_id = i.entity_id
+			AND s.channel = i.channel
+		WHERE s.sent_at > ?
+	`;
+	bindings.push(cutoff);
+
+	const blocked = await database.raw(sql, bindings);
 
 	const blockedSet = new Set(
 		blocked.rows.map(r => `${r.user_id}|${r.band_id}|${r.entity_collection}|${r.entity_id}|${r.channel}`)

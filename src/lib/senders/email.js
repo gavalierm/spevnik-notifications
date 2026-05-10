@@ -29,7 +29,7 @@ export async function sendEmailBatch(sendItems, { services, getSchema, logger })
 	// Group by identical (subject + html).
 	const groups = new Map();
 	for (const item of sendItems) {
-		const key = item.payload.subject + '' + item.payload.html;
+		const key = item.payload.subject + '\x00' + item.payload.html;
 		if (!groups.has(key)) groups.set(key, []);
 		groups.get(key).push(item);
 	}

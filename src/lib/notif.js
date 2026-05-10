@@ -11,7 +11,7 @@
  * @param {object|null} notifications - users.settings.notifications JSON
  * @param {number|string} bandId
  * @param {string} event - jeden z EVENT_KEYS
- * @param {string} channel - 'push' | 'email'
+ * @param {string} channel - 'device' | 'email' (matches SPA events.js CHANNELS)
  * @returns {boolean}
  */
 export function shouldNotify(notifications, bandId, event, channel) {
