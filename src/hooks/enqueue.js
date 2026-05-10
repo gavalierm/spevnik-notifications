@@ -3,8 +3,10 @@
 // Lacný INSERT do notification_events. Žiadny resolve recipients, žiadny send.
 // Hook je after-commit (action), takže entity_id je vždy známe.
 
-import { COLLECTIONS_WATCHED } from '../lib/constants.js';
+import { COLLECTIONS_WATCHED, EVENT_KEYS } from '../lib/constants.js';
 import { mapToEventKey, resolveContext } from '../lib/event-mapping.js';
+
+const _eventKeysSet = new Set(EVENT_KEYS);
 
 // Idempotent schema bootstrap — runs once at extension load.
 // Indexes can't be created via Directus collections API; this is the only path
@@ -29,8 +31,13 @@ async function ensureSchema(database, logger) {
 	logger.info('[notif-ensureSchema] notification indexes verified');
 }
 
-async function enqueue(database, { eventKey, bandId, entityCollection, entityId, actorId, payload }) {
+async function enqueue(database, logger, { eventKey, bandId, entityCollection, entityId, actorId, payload }) {
 	if (!eventKey || bandId == null || entityId == null) return;
+	if (!_eventKeysSet.has(eventKey)) {
+		// Drift between SPA events.js EVENT_KEYS and extension constants.js EVENT_KEYS.
+		// We still record the event (no data loss) but flag for ops attention.
+		logger.warn(`[notif-enqueue] unknown event_key=${eventKey} — possible SPA↔extension drift, update constants.js EVENT_KEYS`);
+	}
 	await database('notification_events').insert({
 		event_key: eventKey,
 		band_id: bandId,
@@ -56,7 +63,7 @@ export default ({ action }, { database, logger }) => {
 				if (!eventKey) return;
 				const ctx = await resolveContext(database, collection, key, payload);
 				if (!ctx || !ctx.bandId) return;
-				await enqueue(database, {
+				await enqueue(database, logger, {
 					eventKey,
 					bandId: ctx.bandId,
 					entityCollection: ctx.entityCollection,

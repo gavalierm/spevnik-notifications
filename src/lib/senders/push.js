@@ -3,6 +3,21 @@
 import webPush from 'web-push';
 import { SEND_CONCURRENCY_PUSH } from '../constants.js';
 
+// VAPID details are configured once per process. Mutating web-push global state
+// on every batch send is wasteful (env vars don't change) and unsafe under
+// horizontal scaling. The flag ensures setVapidDetails runs at most once.
+let _vapidConfigured = false;
+function ensureVapid(env, logger) {
+	if (_vapidConfigured) return true;
+	if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) {
+		logger.error('[notif-worker] Missing VAPID env — skipping push batch');
+		return false;
+	}
+	webPush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
+	_vapidConfigured = true;
+	return true;
+}
+
 /**
  * @param {Array<{
  *   user_id, band_id, entity_collection, entity_id,
@@ -14,12 +29,9 @@ import { SEND_CONCURRENCY_PUSH } from '../constants.js';
  */
 export async function sendPushBatch(sendItems, { env, database, logger }) {
 	if (!sendItems.length) return { delivered: [], expiredDeviceIds: [] };
-	if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) {
-		logger.error('[notif-worker] Missing VAPID env — skipping push batch');
+	if (!ensureVapid(env, logger)) {
 		return { delivered: [], expiredDeviceIds: [] };
 	}
-
-	webPush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
 
 	const delivered = [];
 	const expiredDeviceIds = new Set();

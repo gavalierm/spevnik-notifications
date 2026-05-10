@@ -47,10 +47,12 @@ export async function sendEmailBatch(sendItems, { services, getSchema, logger })
 			if (recipients.length === 1) {
 				await mailService.send({ to: recipients[0], subject, html });
 			} else {
-				// Use first as `to` and rest as `bcc` to mask recipients from each other.
+				// Pure BCC fan-out. Placeholder to: header avoids exposing any real
+				// recipient address to other batch members. Most SMTP servers and
+				// mail clients accept this format gracefully.
 				await mailService.send({
-					to: recipients[0],
-					bcc: recipients.slice(1),
+					to: 'Undisclosed Recipients <noreply@spevnik.online>',
+					bcc: recipients,
 					subject,
 					html,
 				});

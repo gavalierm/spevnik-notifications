@@ -12,8 +12,9 @@ export const COLLECTIONS_WATCHED = ['songs', 'setlists', 'albums', 'setlist_part
 export const CHANNELS = ['push', 'email'];
 
 // SPA event keys (mirror of spevnik/src/lib/notifications/events.js EVENT_KEYS).
-// SYNC INVARIANT: keep in lockstep with SPA. Drift will be detected at extension
-// load time by checking all writes hit known keys.
+// SYNC INVARIANT: keep in lockstep with SPA. Drift surfaces as a [notif-enqueue]
+// "unknown event_key=..." warning in Directus logs. Events are still persisted
+// (no data loss), but worker may not deliver them if shouldNotify can't resolve.
 export const EVENT_KEYS = [
 	'band_create',
 	'setlist_create',
