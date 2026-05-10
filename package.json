@@ -4,15 +4,22 @@
   "description": "Spevnik unified notifications — push + email with per-recipient dedup window",
   "type": "module",
   "directus:extension": {
-    "type": "operation",
+    "type": "bundle",
     "path": {
       "app": "dist/app.js",
       "api": "dist/api.js"
     },
-    "source": {
-      "app": "src/app.js",
-      "api": "src/api.js"
-    },
+    "entries": [
+      { "type": "hook", "name": "enqueue", "source": "src/hooks/enqueue.js" },
+      {
+        "type": "operation",
+        "name": "worker",
+        "source": {
+          "app": "src/operations/worker.app.js",
+          "api": "src/operations/worker.js"
+        }
+      }
+    ],
     "host": "^11.0.0"
   },
   "dependencies": {
