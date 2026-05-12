@@ -4,11 +4,11 @@ const BODIES = {
 	band_create: (entity) => `Nové: ${entity.title}`,
 	setlist_create: (entity) => `Nové: ${entity.title || 'bez názvu'}`,
 	setlist_update: (entity) => `Aktualizované: ${entity.title || 'bez názvu'}`,
-	setlist_attendance_invited: (entity) => `Pozvánka do setlistu: ${entity.title || 'bez názvu'}`,
+	setlist_attendance_invited: (entity) => `Pozvánka: ${entity.title || 'bez názvu'}`,
 	setlist_attendance_responded: (entity, ctx) => {
 		const c = ctx?.confirmedCount ?? 0;
 		const t = ctx?.totalCount ?? 0;
-		return `Účasť v ${entity.title || 'setliste'}: potvrdených ${c}/${t}`;
+		return `Účasť: Potvrdených ${c}/${t}`;
 	},
 	song_create: (entity) => `Nové: ${entity.title || 'bez názvu'}`,
 	song_update: (entity) => `Aktualizované: ${entity.title || 'bez názvu'}`,
