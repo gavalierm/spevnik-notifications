@@ -1,41 +1,36 @@
 // src/lib/templates/push.js — push notification title + body.
 //
-// Title = krátka headline (label + entity title alebo aggregát).
-// Body  = kontext (entity type + kapela) — to čo by sa stratilo, keby user
-//         videl iba title (napr. "Nové: Greatest Hits" bez info, že je to album
-//         v kapele X).
+// Title = generic (label + entity type), bez konkrétneho názvu. Lock-screen
+//         riadok s title má dátum/čas pripojený, takže miesto je obmedzené.
+// Body  = concrete info na začiatku (entity title → band title), žiadne
+//         label-y typu "Kapela:" — tie posúvajú hodnotu za truncate.
 
 const TITLES = {
-	band_create: (entity) => `Nové: ${entity.title}`,
-	album_create: (entity) => `Nové: ${entity.title}`,
-	setlist_create: (entity) => `Nové: ${entity.title || 'bez názvu'}`,
-	setlist_update: (entity) => `Aktualizované: ${entity.title || 'bez názvu'}`,
-	setlist_attendance_invited: (entity) => `Pozvánka: ${entity.title || 'bez názvu'}`,
-	setlist_attendance_responded: (entity, ctx) => {
-		const c = ctx?.confirmedCount ?? 0;
-		const t = ctx?.totalCount ?? 0;
-		return `Účasť: Potvrdených ${c}/${t}`;
-	},
-	song_create: (entity) => `Nové: ${entity.title || 'bez názvu'}`,
-	song_update: (entity) => `Aktualizované: ${entity.title || 'bez názvu'}`,
+	band_create: () => `Nová kapela`,
+	album_create: () => `Nový album`,
+	setlist_create: () => `Nový setlist`,
+	setlist_update: () => `Aktualizovaný setlist`,
+	setlist_attendance_invited: () => `Pozvánka do setlistu`,
+	setlist_attendance_responded: () => `Aktualizácia účasti`,
+	song_create: () => `Nová pieseň`,
+	song_update: () => `Aktualizovaná pieseň`,
 };
 
-// Push body sa na lock-screen-e truncuje od konca — concrete info (názov kapely
-// / setlistu) MUSÍ byť na začiatku. Žiadne generic label-y ("Setlist:", "Kapela:")
-// ako prefix — tie posúvajú reálnu hodnotu za truncate.
 const BODIES = {
-	band_create: () => `Privítajte novú kapelu v Spevníku!`,
-	album_create: (entity, band) => band?.title || '',
-	setlist_create: (entity, band) => band?.title || '',
-	setlist_update: (entity, band) => band?.title || '',
-	// Invited title nesie setlist názov, body kapelu.
-	setlist_attendance_invited: (entity, band) => band?.title || '',
-	// Responded title má len pomer X/Y — body dodá setlist názov prvý (concrete
-	// identifier čo je akcia o), kapela ako secondary kontext.
-	setlist_attendance_responded: (entity, band) =>
-		`${entity.title || 'bez názvu'} · ${band?.title || ''}`,
-	song_create: (entity, band) => band?.title || '',
-	song_update: (entity, band) => band?.title || '',
+	// band_create: entity IS the new band. Žiadny parent band.
+	band_create: (entity) => `${entity.title} · Privítajte ich v Spevníku!`,
+	album_create: (entity, band) => `${entity.title} · ${band?.title || ''}`,
+	setlist_create: (entity, band) => `${entity.title || 'bez názvu'} · ${band?.title || ''}`,
+	setlist_update: (entity, band) => `${entity.title || 'bez názvu'} · ${band?.title || ''}`,
+	setlist_attendance_invited: (entity, band) => `${entity.title || 'bez názvu'} · ${band?.title || ''}`,
+	// Responded: counts sú reálna update info → na začiatok pred truncate.
+	setlist_attendance_responded: (entity, band, ctx) => {
+		const c = ctx?.confirmedCount ?? 0;
+		const t = ctx?.totalCount ?? 0;
+		return `${c}/${t} potvrdených · ${entity.title || 'bez názvu'} · ${band?.title || ''}`;
+	},
+	song_create: (entity, band) => `${entity.title || 'bez názvu'} · ${band?.title || ''}`,
+	song_update: (entity, band) => `${entity.title || 'bez názvu'} · ${band?.title || ''}`,
 };
 
 /**
