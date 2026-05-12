@@ -75,11 +75,16 @@ export default {
 						bandsCache.set(ev.band_id, band);
 					}
 
-					// Lazy load entity
+					// Lazy load entity. Setlists ťahajú aj `date` — templates ho zobrazujú
+					// vedľa title-u, lebo ten istý setlist môže mať rovnaký názov ako iný
+					// (napr. "Nedeľa") a dátum je jediný unikátny identifikátor pre usera.
 					const entKey = `${ev.entity_collection}|${ev.entity_id}`;
 					let entity = entitiesCache.get(entKey);
 					if (!entity) {
-						entity = await trx(ev.entity_collection).where('id', ev.entity_id).first('id', 'title').catch(() => null);
+						const entityFields = ev.entity_collection === 'setlists'
+							? ['id', 'title', 'date']
+							: ['id', 'title'];
+						entity = await trx(ev.entity_collection).where('id', ev.entity_id).first(...entityFields).catch(() => null);
 						if (!entity) entity = { id: ev.entity_id, title: '' };
 						entitiesCache.set(entKey, entity);
 					}

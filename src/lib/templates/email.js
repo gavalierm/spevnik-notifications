@@ -1,30 +1,55 @@
 // src/lib/templates/email.js — HTML body builder pre per-event email.
+//
+// Subject layout: `<event_label>: <entity> [(<date>)] — <band>`
+//   Band ide na koniec — väčšina userov má len 1 kapelu, takže ide o secondary
+//   kontext, nie identifying header.
 
 function appUrl() {
 	return process.env.BATCH_EMAIL_APP_URL || process.env.PUBLIC_URL?.replace(/\/+$/, '') || '';
 }
 
+function fmtDate(d) {
+	if (!d) return '';
+	const dt = d instanceof Date ? d : new Date(d);
+	if (isNaN(dt.getTime())) return '';
+	return `${dt.getDate()}.${dt.getMonth() + 1}.${dt.getFullYear()}`;
+}
+
+// `<entity.title> (<date>)` ak je date prítomný, inak len title.
+function setlistLabel(entity) {
+	const t = entity.title || '(bez názvu)';
+	const d = fmtDate(entity.date);
+	return d ? `${t} (${d})` : t;
+}
+
 const SUBJECTS = {
+	// band_create: entity je samotná kapela — nepotrebuje suffix s band.title (duplicita).
 	band_create: (band, entity) => `Nová kapela: ${entity.title}`,
-	album_create: (band, entity) => `${band.title} — Nový album: ${entity.title}`,
-	setlist_create: (band, entity) => `${band.title} — Nový setlist: ${entity.title || ''}`,
-	setlist_update: (band, entity) => `${band.title} — Setlist aktualizovaný: ${entity.title || ''}`,
-	setlist_attendance_invited: (band, entity) => `${band.title} — Pozvánka: ${entity.title || ''}`,
-	setlist_attendance_responded: (band, entity, ctx) => `${band.title} — Účasť v ${entity.title || 'setliste'}: ${ctx?.confirmedCount ?? 0}/${ctx?.totalCount ?? 0}`,
-	song_create: (band, entity) => `${band.title} — Nová pieseň: ${entity.title || ''}`,
-	song_update: (band, entity) => `${band.title} — Pieseň aktualizovaná: ${entity.title || ''}`,
+	album_create: (band, entity) => `Nový album: ${entity.title} — ${band.title}`,
+	setlist_create: (band, entity) => `Nový setlist: ${setlistLabel(entity)} — ${band.title}`,
+	setlist_update: (band, entity) => `Setlist aktualizovaný: ${setlistLabel(entity)} — ${band.title}`,
+	setlist_attendance_invited: (band, entity) => `Pozvánka: ${setlistLabel(entity)} — ${band.title}`,
+	setlist_attendance_responded: (band, entity, ctx) =>
+		`Účasť v setliste ${setlistLabel(entity)}: ${ctx?.confirmedCount ?? 0}/${ctx?.totalCount ?? 0} — ${band.title}`,
+	song_create: (band, entity) => `Nová pieseň: ${entity.title || ''} — ${band.title}`,
+	song_update: (band, entity) => `Pieseň aktualizovaná: ${entity.title || ''} — ${band.title}`,
 };
 
 const BODY_LINES = {
 	band_create: (entity) => `Bola vytvorená nová kapela <b>${escapeHtml(entity.title)}</b>.`,
 	album_create: (entity) => `Nový album <b>${escapeHtml(entity.title)}</b> bol pridaný do kapely.`,
-	setlist_create: (entity) => `Nový setlist <b>${escapeHtml(entity.title || '(bez názvu)')}</b> bol pridaný do kapely.`,
-	setlist_update: (entity) => `Setlist <b>${escapeHtml(entity.title || '(bez názvu)')}</b> bol aktualizovaný.`,
-	setlist_attendance_invited: (entity) => `Bol/a si pozvaný/á do setlistu <b>${escapeHtml(entity.title || '(bez názvu)')}</b>.`,
-	setlist_attendance_responded: (entity, ctx) => `Aktuálny stav účasti v setliste <b>${escapeHtml(entity.title || '(bez názvu)')}</b>: <b>${ctx?.confirmedCount ?? 0}/${ctx?.totalCount ?? 0}</b> potvrdených.`,
+	setlist_create: (entity) => `Nový setlist <b>${escapeHtml(entity.title || '(bez názvu)')}</b>${dateSuffix(entity)} bol pridaný do kapely.`,
+	setlist_update: (entity) => `Setlist <b>${escapeHtml(entity.title || '(bez názvu)')}</b>${dateSuffix(entity)} bol aktualizovaný.`,
+	setlist_attendance_invited: (entity) => `Bol/a si pozvaný/á do setlistu <b>${escapeHtml(entity.title || '(bez názvu)')}</b>${dateSuffix(entity)}.`,
+	setlist_attendance_responded: (entity, ctx) => `Aktuálny stav účasti v setliste <b>${escapeHtml(entity.title || '(bez názvu)')}</b>${dateSuffix(entity)}: <b>${ctx?.confirmedCount ?? 0}/${ctx?.totalCount ?? 0}</b> potvrdených.`,
 	song_create: (entity) => `Nová pieseň <b>${escapeHtml(entity.title || '(bez názvu)')}</b> bola pridaná.`,
 	song_update: (entity) => `Pieseň <b>${escapeHtml(entity.title || '(bez názvu)')}</b> bola aktualizovaná.`,
 };
+
+function dateSuffix(entity) {
+	const d = fmtDate(entity.date);
+	return d ? ` (${d})` : '';
+}
 
 function escapeHtml(s) {
 	return String(s ?? '').replace(/[&<>"']/g, (c) => ({
