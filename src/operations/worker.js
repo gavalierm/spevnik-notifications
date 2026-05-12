@@ -97,10 +97,18 @@ export default {
 							.where('setlists_id', ev.entity_id)
 							.select(trx.raw(`
 								COUNT(*) FILTER (WHERE attendance_status = true)::int AS confirmed,
+								COUNT(*) FILTER (WHERE attendance_status = false)::int AS declined,
+								COUNT(*) FILTER (WHERE attendance_status IS NOT NULL)::int AS responded,
 								COUNT(*)::int AS total
 							`))
 							.first();
-						extraCtx = { ...extraCtx, confirmedCount: counts?.confirmed ?? 0, totalCount: counts?.total ?? 0 };
+						extraCtx = {
+							...extraCtx,
+							confirmedCount: counts?.confirmed ?? 0,
+							declinedCount: counts?.declined ?? 0,
+							respondedCount: counts?.responded ?? 0,
+							totalCount: counts?.total ?? 0,
+						};
 					}
 
 					// Recipients for this band — cached per worker run

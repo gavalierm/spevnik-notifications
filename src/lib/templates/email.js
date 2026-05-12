@@ -41,7 +41,16 @@ const BODY_LINES = {
 	setlist_create: (entity) => `Nový setlist <b>${escapeHtml(entity.title || '(bez názvu)')}</b>${dateSuffix(entity)} bol pridaný do kapely.`,
 	setlist_update: (entity) => `Setlist <b>${escapeHtml(entity.title || '(bez názvu)')}</b>${dateSuffix(entity)} bol aktualizovaný.`,
 	setlist_attendance_invited: (entity) => `Bol/a si pozvaný/á do setlistu <b>${escapeHtml(entity.title || '(bez názvu)')}</b>${dateSuffix(entity)}.`,
-	setlist_attendance_responded: (entity, ctx) => `Aktuálny stav účasti v setliste <b>${escapeHtml(entity.title || '(bez názvu)')}</b>${dateSuffix(entity)}: <b>${ctx?.confirmedCount ?? 0}/${ctx?.totalCount ?? 0}</b> potvrdených.`,
+	setlist_attendance_responded: (entity, ctx) => {
+		const c = ctx?.confirmedCount ?? 0;
+		const d = ctx?.declinedCount ?? 0;
+		const r = ctx?.respondedCount ?? 0;
+		const t = ctx?.totalCount ?? 0;
+		return `Aktuálny stav účasti v setliste <b>${escapeHtml(entity.title || '(bez názvu)')}</b>${dateSuffix(entity)}:<br>`
+			+ `Potvrdených: <b>${c}</b><br>`
+			+ `Zamietnutých: <b>${d}</b><br>`
+			+ `Celkovo: <b>${r}/${t}</b>`;
+	},
 	song_create: (entity) => `Nová pieseň <b>${escapeHtml(entity.title || '(bez názvu)')}</b> bola pridaná.`,
 	song_update: (entity) => `Pieseň <b>${escapeHtml(entity.title || '(bez názvu)')}</b> bola aktualizovaná.`,
 };
