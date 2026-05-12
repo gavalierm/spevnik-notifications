@@ -29,8 +29,12 @@ const SUBJECTS = {
 	setlist_create: (band, entity) => `Nový setlist: ${setlistLabel(entity)} — ${band.title}`,
 	setlist_update: (band, entity) => `Setlist aktualizovaný: ${setlistLabel(entity)} — ${band.title}`,
 	setlist_attendance_invited: (band, entity) => `Pozvánka: ${setlistLabel(entity)} — ${band.title}`,
-	setlist_attendance_responded: (band, entity, ctx) =>
-		`Účasť v setliste ${setlistLabel(entity)}: ${ctx?.confirmedCount ?? 0}/${ctx?.totalCount ?? 0} — ${band.title}`,
+	setlist_attendance_responded: (band, entity, ctx) => {
+		const c = ctx?.confirmedCount ?? 0;
+		const d = ctx?.declinedCount ?? 0;
+		const t = ctx?.totalCount ?? 0;
+		return `Účasť ${c}+/${d}- z ${t}: ${setlistLabel(entity)} — ${band.title}`;
+	},
 	song_create: (band, entity) => `Nová pieseň: ${entity.title || ''} — ${band.title}`,
 	song_update: (band, entity) => `Pieseň aktualizovaná: ${entity.title || ''} — ${band.title}`,
 };
