@@ -84,17 +84,18 @@ export default {
 						entitiesCache.set(entKey, entity);
 					}
 
-					// For attendance_responded, fetch current confirmed/total
-					let extraCtx = null;
+					// Template context — entityCollection umožňuje rozlíšiť album-driven band_create
+					// (piggyback) vs. skutočné band_create v rovnakom event_key.
+					let extraCtx = { entityCollection: ev.entity_collection };
 					if (ev.event_key === 'setlist_attendance_responded') {
 						const counts = await trx('setlist_participants')
-							.where('setlist', ev.entity_id)
+							.where('setlists_id', ev.entity_id)
 							.select(trx.raw(`
-								COUNT(*) FILTER (WHERE status = 'confirmed')::int AS confirmed,
+								COUNT(*) FILTER (WHERE attendance_status = true)::int AS confirmed,
 								COUNT(*)::int AS total
 							`))
 							.first();
-						extraCtx = { confirmedCount: counts?.confirmed ?? 0, totalCount: counts?.total ?? 0 };
+						extraCtx = { ...extraCtx, confirmedCount: counts?.confirmed ?? 0, totalCount: counts?.total ?? 0 };
 					}
 
 					// Recipients for this band — cached per worker run

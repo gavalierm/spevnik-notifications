@@ -1,7 +1,7 @@
 // src/lib/event-mapping.js — collection × operation → event_key.
 //
-// Setlist_participants má 2 distinct events (create=invited, update=responded)
-// detected by payload.status presence.
+// Setlist_participants má 2 distinct events (create=invited, update=responded);
+// responded detekujeme na zmene payload.attendance_status (null=čaká, true/false=odpoveď).
 
 /**
  * @param {string} collection
@@ -12,10 +12,14 @@
 export function mapToEventKey(collection, op, payload = null) {
 	if (collection === 'songs') return op === 'create' ? 'song_create' : 'song_update';
 	if (collection === 'setlists') return op === 'create' ? 'setlist_create' : 'setlist_update';
-	if (collection === 'albums') return null;  // no album event in SPA model
+	// Albums piggyback on band_create ACL (silent force — no separate user toggle).
+	// Templates rozlišujú podľa entity_collection. Update events sa neeventujú.
+	if (collection === 'albums') return op === 'create' ? 'band_create' : null;
 	if (collection === 'setlist_participants') {
 		if (op === 'create') return 'setlist_attendance_invited';
-		if (op === 'update' && payload?.status && payload.status !== 'pending') return 'setlist_attendance_responded';
+		if (op === 'update' && payload && 'attendance_status' in payload && payload.attendance_status !== null) {
+			return 'setlist_attendance_responded';
+		}
 		return null;
 	}
 	return null;
@@ -47,7 +51,7 @@ export async function resolveContext(database, collection, entityId, payload = n
 	}
 	if (collection === 'setlist_participants') {
 		const row = await database('setlist_participants')
-			.join('setlists', 'setlist_participants.setlist', 'setlists.id')
+			.join('setlists', 'setlist_participants.setlists_id', 'setlists.id')
 			.where('setlist_participants.id', entityId)
 			.first('setlists.band as band', 'setlists.id as setlist_id');
 		if (!row) return null;

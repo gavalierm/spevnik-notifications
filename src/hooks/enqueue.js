@@ -83,7 +83,7 @@ export default ({ action }, { database, logger }) => {
 				for (const id of keys) {
 					const ctx = await resolveContext(database, collection, id, payload);
 					if (!ctx || !ctx.bandId) continue;
-					await enqueue(database, {
+					await enqueue(database, logger, {
 						eventKey,
 						bandId: ctx.bandId,
 						entityCollection: ctx.entityCollection,

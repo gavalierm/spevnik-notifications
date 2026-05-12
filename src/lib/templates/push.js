@@ -1,7 +1,9 @@
 // src/lib/templates/push.js — krátke jednoradové notif body pre web push.
 
 const BODIES = {
-	band_create: (entity) => `Nová kapela: ${entity.title}`,
+	band_create: (entity, ctx) => ctx?.entityCollection === 'albums'
+		? `Nový album: ${entity.title}`
+		: `Nová kapela: ${entity.title}`,
 	setlist_create: (entity) => `Nový setlist: ${entity.title || 'bez názvu'}`,
 	setlist_update: (entity) => `Setlist aktualizovaný: ${entity.title || 'bez názvu'}`,
 	setlist_attendance_invited: (entity) => `Pozvánka do setlistu: ${entity.title || 'bez názvu'}`,
