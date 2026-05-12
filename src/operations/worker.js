@@ -67,6 +67,12 @@ export default {
 						continue;
 					}
 
+					// System-triggered eventy (bulk flows, crons, raw queries bez accountability)
+					// nemajú attributable aktora → žiadny human user to "nespravil" → nikto
+					// nepotrebuje notif. Pre flow author-ov chcúcich user-facing notifs:
+					// nastaviť accountability='all' v flow config-u — actor sa propaguje.
+					if (!ev.actor_id) continue;
+
 					// Lazy load band
 					let band = bandsCache.get(ev.band_id);
 					if (!band) {
@@ -119,6 +125,9 @@ export default {
 					}
 
 					for (const r of recipients) {
+						// Skip aktor — user nemá dostávať notif o vlastnej akcii.
+						if (r.id === ev.actor_id) continue;
+
 						for (const channel of CHANNELS) {
 							// SPA channel naming: 'device' (push), 'email' (email).
 							// Extension internal: 'push' / 'email'. Conversion at consumer call.
