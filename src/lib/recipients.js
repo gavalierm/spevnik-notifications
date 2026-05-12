@@ -3,8 +3,12 @@
 // Single jsonb query: vráti všetkých users related k bandu (cez settings.notifications.bands)
 // + ich push_subscriptions joinom. Žiadny round-trip per recipient.
 //
-// Note: Postgres `?` jsonb key-existence operator collides with Knex `?` positional
+// Note 1: Postgres `?` jsonb key-existence operator collides with Knex `?` positional
 // binding parser. Use jsonb_exists() function form to keep bindings unambiguous.
+//
+// Note 2: directus_users.settings je `json` (nie `jsonb`) — json nemá equality operator,
+// takže nemôže byť v GROUP BY. Spoliehame sa na PostgreSQL functional dependency:
+// GROUP BY u.id (PK) povoľuje SELECT všetkých u.* stĺpcov bez agregácie.
 
 /**
  * @param {import('knex').Knex} database
@@ -37,7 +41,7 @@ export async function loadRecipientsForBand(database, bandId) {
 		LEFT JOIN push_subscriptions ps ON ps.user = u.id
 		WHERE jsonb_exists(u.settings::jsonb -> 'notifications' -> 'bands', ?)
 		  AND u.status = 'active'
-		GROUP BY u.id, u.email, u.settings
+		GROUP BY u.id
 	`, [String(bandId)]);
 
 	return result.rows.map(r => ({
