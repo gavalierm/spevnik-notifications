@@ -24,7 +24,7 @@ const TITLES = {
 // / setlistu) MUSÍ byť na začiatku. Žiadne generic label-y ("Setlist:", "Kapela:")
 // ako prefix — tie posúvajú reálnu hodnotu za truncate.
 const BODIES = {
-	band_create: () => `Spevník`,
+	band_create: () => `Privítajte novú kapelu v Spevníku!`,
 	album_create: (entity, band) => band?.title || '',
 	setlist_create: (entity, band) => band?.title || '',
 	setlist_update: (entity, band) => band?.title || '',
