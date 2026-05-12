@@ -5,9 +5,8 @@ function appUrl() {
 }
 
 const SUBJECTS = {
-	band_create: (band, entity, ctx) => ctx?.entityCollection === 'albums'
-		? `${band.title} — Nový album: ${entity.title}`
-		: `Nová kapela: ${entity.title}`,
+	band_create: (band, entity) => `Nová kapela: ${entity.title}`,
+	album_create: (band, entity) => `${band.title} — Nový album: ${entity.title}`,
 	setlist_create: (band, entity) => `${band.title} — Nový setlist: ${entity.title || ''}`,
 	setlist_update: (band, entity) => `${band.title} — Setlist aktualizovaný: ${entity.title || ''}`,
 	setlist_attendance_invited: (band, entity) => `${band.title} — Pozvánka: ${entity.title || ''}`,
@@ -17,9 +16,8 @@ const SUBJECTS = {
 };
 
 const BODY_LINES = {
-	band_create: (entity, ctx) => ctx?.entityCollection === 'albums'
-		? `Nový album <b>${escapeHtml(entity.title)}</b> bol pridaný do kapely.`
-		: `Bola vytvorená nová kapela <b>${escapeHtml(entity.title)}</b>.`,
+	band_create: (entity) => `Bola vytvorená nová kapela <b>${escapeHtml(entity.title)}</b>.`,
+	album_create: (entity) => `Nový album <b>${escapeHtml(entity.title)}</b> bol pridaný do kapely.`,
 	setlist_create: (entity) => `Nový setlist <b>${escapeHtml(entity.title || '(bez názvu)')}</b> bol pridaný do kapely.`,
 	setlist_update: (entity) => `Setlist <b>${escapeHtml(entity.title || '(bez názvu)')}</b> bol aktualizovaný.`,
 	setlist_attendance_invited: (entity) => `Bol/a si pozvaný/á do setlistu <b>${escapeHtml(entity.title || '(bez názvu)')}</b>.`,

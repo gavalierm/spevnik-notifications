@@ -11,12 +11,15 @@ export const ADVISORY_LOCK_KEY = 8273918273;
 export const COLLECTIONS_WATCHED = ['songs', 'setlists', 'albums', 'setlist_participants'];
 export const CHANNELS = ['push', 'email'];
 
-// SPA event keys (mirror of spevnik/src/lib/notifications/events.js EVENT_KEYS).
-// SYNC INVARIANT: keep in lockstep with SPA. Drift surfaces as a [notif-enqueue]
-// "unknown event_key=..." warning in Directus logs. Events are still persisted
-// (no data loss), but worker may not deliver them if shouldNotify can't resolve.
+// Event keys recognized by extension.
+// - SPA keys (mirror of spevnik/src/lib/notifications/events.js EVENT_KEYS) —
+//   SYNC INVARIANT: keep in lockstep. Drift surfaces as a [notif-enqueue]
+//   "unknown event_key=..." warning v Directus logoch.
+// - Server-side internals (album_create) — NIE sú v SPA EVENT_KEYS; ACL je
+//   aliasovaný cez notif.js ACL_ALIASES (album_create → band_create).
 export const EVENT_KEYS = [
 	'band_create',
+	'album_create',
 	'setlist_create',
 	'setlist_update',
 	'setlist_attendance_invited',

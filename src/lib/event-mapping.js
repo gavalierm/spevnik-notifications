@@ -12,9 +12,10 @@
 export function mapToEventKey(collection, op, payload = null) {
 	if (collection === 'songs') return op === 'create' ? 'song_create' : 'song_update';
 	if (collection === 'setlists') return op === 'create' ? 'setlist_create' : 'setlist_update';
-	// Albums piggyback on band_create ACL (silent force — no separate user toggle).
-	// Templates rozlišujú podľa entity_collection. Update events sa neeventujú.
-	if (collection === 'albums') return op === 'create' ? 'band_create' : null;
+	// Albums majú vlastné event_key 'album_create'. ACL je aliasovaný na band_create
+	// v notif.js ACL_ALIASES — user nemá samostatný toggle v Settings, ale dostane
+	// notifikáciu ak má zapnuté band_create. Update events sa neeventujú.
+	if (collection === 'albums') return op === 'create' ? 'album_create' : null;
 	if (collection === 'setlist_participants') {
 		if (op === 'create') return 'setlist_attendance_invited';
 		if (op === 'update' && payload && 'attendance_status' in payload && payload.attendance_status !== null) {

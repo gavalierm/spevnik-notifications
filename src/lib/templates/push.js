@@ -7,6 +7,7 @@
 
 const TITLES = {
 	band_create: (entity) => `Nové: ${entity.title}`,
+	album_create: (entity) => `Nové: ${entity.title}`,
 	setlist_create: (entity) => `Nové: ${entity.title || 'bez názvu'}`,
 	setlist_update: (entity) => `Aktualizované: ${entity.title || 'bez názvu'}`,
 	setlist_attendance_invited: (entity) => `Pozvánka: ${entity.title || 'bez názvu'}`,
@@ -20,11 +21,8 @@ const TITLES = {
 };
 
 const BODIES = {
-	// Pure band_create (bez emitter-a) → "Nová kapela v Spevníku".
-	// Album-driven piggyback (ctx.entityCollection === 'albums') → entity type Album + parent kapela.
-	band_create: (entity, band, ctx) => ctx?.entityCollection === 'albums'
-		? `Album · Kapela: ${band?.title || ''}`
-		: `Nová kapela v Spevníku`,
+	band_create: () => `Nová kapela v Spevníku`,
+	album_create: (entity, band) => `Album · Kapela: ${band?.title || ''}`,
 	setlist_create: (entity, band) => `Setlist · Kapela: ${band?.title || ''}`,
 	setlist_update: (entity, band) => `Setlist · Kapela: ${band?.title || ''}`,
 	// Invited title už nesie setlist názov; body len kapela.
