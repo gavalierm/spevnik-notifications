@@ -33,7 +33,7 @@ const SUBJECTS = {
 		const c = ctx?.confirmedCount ?? 0;
 		const d = ctx?.declinedCount ?? 0;
 		const t = ctx?.totalCount ?? 0;
-		return `Účasť ${c}+/${d}- z ${t}: ${setlistLabel(entity)} — ${band.title}`;
+		return `Účasť +${c}/-${d} z ${t}: ${setlistLabel(entity)} — ${band.title}`;
 	},
 	song_create: (band, entity) => `Nová pieseň: ${entity.title || ''} — ${band.title}`,
 	song_update: (band, entity) => `Pieseň aktualizovaná: ${entity.title || ''} — ${band.title}`,
