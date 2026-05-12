@@ -1,19 +1,17 @@
 // src/lib/templates/push.js — krátke jednoradové notif body pre web push.
 
 const BODIES = {
-	band_create: (entity, ctx) => ctx?.entityCollection === 'albums'
-		? `Nový album: ${entity.title}`
-		: `Nová kapela: ${entity.title}`,
-	setlist_create: (entity) => `Nový setlist: ${entity.title || 'bez názvu'}`,
-	setlist_update: (entity) => `Setlist aktualizovaný: ${entity.title || 'bez názvu'}`,
+	band_create: (entity) => `Nové: ${entity.title}`,
+	setlist_create: (entity) => `Nové: ${entity.title || 'bez názvu'}`,
+	setlist_update: (entity) => `Aktualizované: ${entity.title || 'bez názvu'}`,
 	setlist_attendance_invited: (entity) => `Pozvánka do setlistu: ${entity.title || 'bez názvu'}`,
 	setlist_attendance_responded: (entity, ctx) => {
 		const c = ctx?.confirmedCount ?? 0;
 		const t = ctx?.totalCount ?? 0;
 		return `Účasť v ${entity.title || 'setliste'}: potvrdených ${c}/${t}`;
 	},
-	song_create: (entity) => `Nová pieseň: ${entity.title || 'bez názvu'}`,
-	song_update: (entity) => `Pieseň aktualizovaná: ${entity.title || 'bez názvu'}`,
+	song_create: (entity) => `Nové: ${entity.title || 'bez názvu'}`,
+	song_update: (entity) => `Aktualizované: ${entity.title || 'bez názvu'}`,
 };
 
 /**
