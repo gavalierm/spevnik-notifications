@@ -169,14 +169,19 @@ export default {
 				}
 
 				// 5. Send
+				// channel field MUSÍ zostať v sendItems — sender vracia delivered unchanged
+				// a step 6 (deliveredUserKeys) skladá Set key cez d.channel. Bez neho key
+				// obsahuje 'undefined' a finalLog filter zhodí všetky entries → 0 INSERT-ov.
 				const pushItems = sendable.filter(s => s.channel === 'push').map(s => ({
 					user_id: s.user_id, band_id: s.band_id,
 					entity_collection: s.entity_collection, entity_id: s.entity_id,
+					channel: 'push',
 					device: s._send.device, payload: s._send.payload,
 				}));
 				const emailItems = sendable.filter(s => s.channel === 'email').map(s => ({
 					user_id: s.user_id, band_id: s.band_id,
 					entity_collection: s.entity_collection, entity_id: s.entity_id,
+					channel: 'email',
 					email: s._send.email, payload: s._send.payload,
 				}));
 
