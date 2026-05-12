@@ -41,12 +41,37 @@ export default {
 					return { processed: 0 };
 				}
 
-				// 2. Collapse duplicates: keep latest event per (band, entity_collection, entity_id).
+				// 2. Collapse duplicates per (band, entity_collection, entity_id).
+				// Priority-aware: konkrétnejší event_key (napr. setlist_attendance_responded)
+				// vyhráva nad generic-om (setlist_update) aj keď je v batchi neskorší.
+				// Pri rovnakej priorite rozhodne timestamp (latest wins).
+				//
+				// Motivácia: SPA pri RSVP toggle PATCH-uje aj parent setlists/<id> s
+				// re-sent field-mi (napr. {title: "..."}). Bez priority by phantom
+				// setlist_update zhodil reálne setlist_attendance_responded.
+				const EVENT_PRIORITY = {
+					setlist_attendance_responded: 10,
+					setlist_attendance_invited: 9,
+					setlist_update: 5,
+					song_update: 5,
+					setlist_create: 4,
+					song_create: 4,
+					album_create: 4,
+					band_create: 4,
+				};
 				const latestByKey = new Map();
 				for (const ev of events) {
 					const k = `${ev.band_id}|${ev.entity_collection}|${ev.entity_id}`;
 					const prev = latestByKey.get(k);
-					if (!prev || new Date(ev.created_at).getTime() > new Date(prev.created_at).getTime()) {
+					if (!prev) {
+						latestByKey.set(k, ev);
+						continue;
+					}
+					const prevP = EVENT_PRIORITY[prev.event_key] ?? 0;
+					const newP = EVENT_PRIORITY[ev.event_key] ?? 0;
+					if (newP > prevP) {
+						latestByKey.set(k, ev);
+					} else if (newP === prevP && new Date(ev.created_at).getTime() > new Date(prev.created_at).getTime()) {
 						latestByKey.set(k, ev);
 					}
 				}
