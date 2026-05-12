@@ -9,11 +9,11 @@ const TITLES = {
 	band_create: () => `Nová kapela`,
 	album_create: () => `Nový album`,
 	setlist_create: () => `Nový setlist`,
-	setlist_update: () => `Aktualizovaný setlist`,
-	setlist_attendance_invited: () => `Pozvánka do setlistu`,
-	setlist_attendance_responded: () => `Aktualizácia účasti`,
+	setlist_update: () => `Úprava setlistu`,
+	setlist_attendance_invited: () => `Pozvánka`,
+	setlist_attendance_responded: () => `Úprava účasti`,
 	song_create: () => `Nová pieseň`,
-	song_update: () => `Aktualizovaná pieseň`,
+	song_update: () => `Úprava piesne`,
 };
 
 const BODIES = {
