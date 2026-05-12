@@ -11,7 +11,18 @@
  */
 export function mapToEventKey(collection, op, payload = null) {
 	if (collection === 'songs') return op === 'create' ? 'song_create' : 'song_update';
-	if (collection === 'setlists') return op === 'create' ? 'setlist_create' : 'setlist_update';
+	if (collection === 'setlists') {
+		if (op === 'create') return 'setlist_create';
+		// SPA po participant update PATCH-uje aj parent setlists/<id> (cache touch).
+		// Tento cascade payload neobsahuje žiadny meaningful setlist field — len
+		// {} alebo relational keys. Bez tohto checku by sa enqueue-oval phantom
+		// setlist_update event ktorý v collapse vyhráva nad reálnym
+		// setlist_attendance_responded (oba majú entity_collection='setlists',
+		// entity_id=setlistId, takže worker step 2 zhodí skorší = attendance event).
+		const SETLIST_MEANINGFUL = new Set(['title', 'date', 'time', 'status', 'notes', 'band', 'type', 'songs', 'files']);
+		const hasMeaningful = payload && Object.keys(payload).some(k => SETLIST_MEANINGFUL.has(k));
+		return hasMeaningful ? 'setlist_update' : null;
+	}
 	// Albums majú vlastné event_key 'album_create'. ACL je aliasovaný na band_create
 	// v notif.js ACL_ALIASES — user nemá samostatný toggle v Settings, ale dostane
 	// notifikáciu ak má zapnuté band_create. Update events sa neeventujú.
