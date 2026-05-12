@@ -42,10 +42,12 @@ const BODIES = {
 	setlist_update: setlistBody,
 	setlist_attendance_invited: setlistBody,
 	// Responded: counts sú reálna update info → na začiatok pred truncate.
+	// Formát +X/-Y z Z konzistentný s email subject-om (signed math notation).
 	setlist_attendance_responded: (entity, band, ctx) => {
 		const c = ctx?.confirmedCount ?? 0;
+		const d = ctx?.declinedCount ?? 0;
 		const t = ctx?.totalCount ?? 0;
-		return `${c}/${t} potvrdených · ${setlistBody(entity, band)}`;
+		return `+${c}/-${d} z ${t} · ${setlistBody(entity, band)}`;
 	},
 	song_create: (entity, band) => `${entity.title || 'bez názvu'} · ${band?.title || ''}`,
 	song_update: (entity, band) => `${entity.title || 'bez názvu'} · ${band?.title || ''}`,
