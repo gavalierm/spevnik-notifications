@@ -15,6 +15,19 @@ function fmtDate(d) {
 	return `${dt.getDate()}.${dt.getMonth() + 1}.${dt.getFullYear()}`;
 }
 
+// Entity-specific deep link na SPA route. Tlačidlo "Otvoriť" musí vziať usera
+// rovno na entitu ktorá udalosť spustila, nie na domovskú stránku.
+function entityUrl(band, entity, ctx) {
+	const base = appUrl();
+	if (!base) return '';
+	const col = ctx?.entityCollection;
+	if (col === 'songs') return `${base}/library/${entity.id}`;
+	if (col === 'setlists') return `${base}/setlists/${entity.id}`;
+	if (col === 'albums') return `${base}/explore/albums/${entity.id}`;
+	if (col === 'bands') return `${base}/explore/bands/${entity.id}`;
+	return base;
+}
+
 // `<entity.title> (<date>)` ak je date prítomný, inak len title.
 function setlistLabel(entity) {
 	const t = entity.title || '(bez názvu)';
@@ -76,20 +89,19 @@ function escapeHtml(s) {
 export function buildEmailPayload(eventKey, band, entity, ctx) {
 	const rawSubject = SUBJECTS[eventKey]?.(band, entity, ctx) ?? `${band.title} — zmena`;
 	// SMTP headers (RFC 5322): no CR/LF allowed in subject. Defensive sanitization
-	// in case band/entity title contains injected newlines.
+	// v prípade že band/entity title obsahuje injectnuté newliny.
 	const subject = rawSubject.replace(/[\r\n]+/g, ' ').slice(0, 998);
 	const line = BODY_LINES[eventKey]?.(entity, ctx) ?? '';
+	const url = entityUrl(band, entity, ctx);
 
+	// Light theme, left-aligned (žiadne `margin:0 auto` na wrapper-i).
 	const html =
-		`<div style="background:#1b1e1f;color:#f0f0f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:32px;max-width:520px;margin:0 auto">`
-		+ `<div style="text-align:center;margin-bottom:24px"><span style="font-size:24px;font-weight:bold;color:#fff">${escapeHtml(band.title)}</span></div>`
-		+ `<div style="background:#252829;border-radius:12px;padding:20px;margin-bottom:20px"><p style="margin:0;color:#fff;font-size:14px;line-height:1.5">${line}</p></div>`
-		+ (function() {
-			const url = appUrl();
-			return url ? `<div style="text-align:center;margin:24px 0"><a href="${url}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:bold">Otvoriť Spevník</a></div>` : '';
-		})()
-		+ `<hr style="border:none;border-top:1px solid #333;margin:24px 0">`
-		+ `<p style="color:#666;font-size:11px;text-align:center;margin:0">Tento email bol odoslaný automaticky z aplikácie Spevník.</p>`
+		`<div style="background:#ffffff;color:#1f2937;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:32px;max-width:520px">`
+		+ `<div style="margin-bottom:24px"><span style="font-size:24px;font-weight:bold;color:#111827">${escapeHtml(band.title)}</span></div>`
+		+ `<div style="background:#f3f4f6;border-radius:12px;padding:20px;margin-bottom:20px"><p style="margin:0;color:#1f2937;font-size:14px;line-height:1.5">${line}</p></div>`
+		+ (url ? `<div style="margin:24px 0"><a href="${url}" style="display:inline-block;background:#2563eb;color:#ffffff;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:bold">Otvoriť Spevník</a></div>` : '')
+		+ `<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0">`
+		+ `<p style="color:#9ca3af;font-size:11px;margin:0">Tento email bol odoslaný automaticky z aplikácie Spevník.</p>`
 		+ `</div>`;
 
 	return { subject, html };

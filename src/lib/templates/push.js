@@ -53,6 +53,17 @@ const BODIES = {
 	song_update: (entity, band) => `${entity.title || 'bez názvu'} · ${band?.title || ''}`,
 };
 
+// Entity-specific deep link (SPA relative path). Service worker po kliknutí
+// otvorí túto cestu v rámci aplikácie. Žiadny base URL — SPA si ho domyslí.
+function entityUrl(entity, ctx) {
+	const col = ctx?.entityCollection;
+	if (col === 'songs') return `/library/${entity.id}`;
+	if (col === 'setlists') return `/setlists/${entity.id}`;
+	if (col === 'albums') return `/explore/albums/${entity.id}`;
+	if (col === 'bands') return `/explore/bands/${entity.id}`;
+	return '/notifications';
+}
+
 /**
  * @param {string} eventKey
  * @param {object} band - { id, title }
@@ -64,7 +75,7 @@ export function buildPushPayload(eventKey, band, entity, ctx) {
 	return {
 		title: TITLES[eventKey]?.(entity, ctx) ?? band?.title ?? 'Spevník',
 		body: BODIES[eventKey]?.(entity, band, ctx) ?? '',
-		url: '/notifications',
+		url: entityUrl(entity, ctx),
 		icon: '/img/fav/android-chrome-192x192.png',
 		badge: '/img/fav/favicon-32x32.png',
 	};
