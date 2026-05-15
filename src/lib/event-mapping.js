@@ -54,7 +54,11 @@ export async function resolveContext(database, collection, entityId, payload = n
 	if (collection === 'songs' || collection === 'setlists' || collection === 'albums') {
 		let bandId = null;
 		if (payload && payload.band !== undefined) {
-			bandId = payload.band ?? null;
+			// SDK can send M2O as a reference object ({ id: N }) instead of scalar id.
+			// notification_events.band_id is an integer column — pass object and the
+			// INSERT throws "invalid input syntax for type integer" in Postgres.
+			const raw = payload.band;
+			bandId = (raw && typeof raw === 'object') ? (raw.id ?? null) : (raw ?? null);
 		} else {
 			const row = await database(collection).where('id', entityId).first('band');
 			bandId = row?.band ?? null;
