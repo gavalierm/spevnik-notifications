@@ -11,6 +11,7 @@ import { buildPushPayload } from '../lib/templates/push.js';
 import { buildEmailPayload } from '../lib/templates/email.js';
 import { pruneOldEvents, pruneOldSentLog } from '../lib/prune.js';
 import { WORKER_BATCH_LIMIT, CHANNELS, COLLECTIONS_WATCHED } from '../lib/constants.js';
+import { notifyAdmins } from '../shared/notify-admin.js';
 
 export default {
 	id: 'spevnik-notifications-worker',
@@ -268,9 +269,10 @@ export default {
 				// Throw inside transaction → automatic rollback → lock auto-released.
 				throw err;
 			}
-		}).catch((err) => {
-			// Outer catch: log + return error response (don't rethrow into Directus flow).
+		}).catch(async (err) => {
+			// Outer catch: log + notify admins + return error response (don't rethrow into Directus flow).
 			logger.error(`[notif-worker] transaction failed: ${err.message}`);
+			await notifyAdmins(ctx, 'spevnik-notifications:worker', err, { phase: 'transaction' });
 			return { error: err.message };
 		});
 	},

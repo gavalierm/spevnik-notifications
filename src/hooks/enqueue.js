@@ -5,6 +5,7 @@
 
 import { COLLECTIONS_WATCHED, EVENT_KEYS } from '../lib/constants.js';
 import { mapToEventKey, resolveContext } from '../lib/event-mapping.js';
+import { notifyAdmins } from '../shared/notify-admin.js';
 
 const _eventKeysSet = new Set(EVENT_KEYS);
 
@@ -50,7 +51,9 @@ async function enqueue(database, logger, { eventKey, bandId, entityCollection, e
 	});
 }
 
-export default ({ action }, { database, logger }) => {
+export default ({ action }, context) => {
+	const { database, logger } = context;
+	const notifyCtx = { services: context.services, database, getSchema: context.getSchema, logger, env: context.env };
 	// Fire-and-forget bootstrap — runs once on extension load.
 	ensureSchema(database, logger).catch(err => {
 		logger.warn(`[notif-ensureSchema] outer error: ${err.message}`);
@@ -73,6 +76,9 @@ export default ({ action }, { database, logger }) => {
 				});
 			} catch (err) {
 				logger.warn(`[notif-enqueue] ${col}.create failed: ${err.message}`);
+				await notifyAdmins(notifyCtx, `spevnik-notifications:enqueue:${col}.create`, err, {
+					collection, key, actor: accountability?.user,
+				});
 			}
 		});
 
@@ -94,6 +100,9 @@ export default ({ action }, { database, logger }) => {
 				}
 			} catch (err) {
 				logger.warn(`[notif-enqueue] ${col}.update failed: ${err.message}`);
+				await notifyAdmins(notifyCtx, `spevnik-notifications:enqueue:${col}.update`, err, {
+					collection, keys, actor: accountability?.user,
+				});
 			}
 		});
 	}
