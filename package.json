@@ -1,6 +1,6 @@
 {
   "name": "spevnik-notifications",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Spevnik unified notifications — push + email with per-recipient dedup window",
   "type": "module",
   "directus:extension": {
@@ -29,6 +29,7 @@
     "@directus/extensions-sdk": "^17.1.0"
   },
   "scripts": {
+    "prebuild": "node scripts/check-hooks-installed.js",
     "build": "npx directus-extension build",
     "dev": "npx directus-extension build --watch"
   }
