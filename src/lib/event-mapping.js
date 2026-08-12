@@ -5,8 +5,8 @@
 
 /**
  * @param {string} collection
- * @param {'create'|'update'} op
- * @param {object} [payload] - body of the change request, used for setlist_participants disambiguation
+ * @param {'create'|'update'|'delete'} op
+ * @param {object} [payload] - body of the change request, used for setlist_participants/setlists_songs disambiguation
  * @returns {string|null} event_key or null if no event applies
  */
 export function mapToEventKey(collection, op, payload = null) {
@@ -31,6 +31,22 @@ export function mapToEventKey(collection, op, payload = null) {
 		if (op === 'create') return 'setlist_attendance_invited';
 		if (op === 'update' && payload && 'attendance_status' in payload && payload.attendance_status !== null) {
 			return 'setlist_attendance_responded';
+		}
+		return null;
+	}
+	if (collection === 'setlists_songs') {
+		// Adding/removing a song is always meaningful content change.
+		if (op === 'create' || op === 'delete') return 'setlist_update';
+		if (op === 'update') {
+			// Reorder (drag-and-drop → updateSetlistSongOrder → batchUpdate) PATCHes
+			// each junction row with a bare {sort} (Directus batch-array update may
+			// echo the primary key back as {sort, id}) — cosmetic only, must not
+			// notify. Any other key present (key_override, bpm_override, note,
+			// songs_id, ...) is a real content change to the junction row.
+			const REORDER_ONLY_KEYS = new Set(['sort', 'id']);
+			const keys = payload ? Object.keys(payload) : [];
+			const isReorderOnly = keys.length > 0 && keys.every(k => REORDER_ONLY_KEYS.has(k));
+			return isReorderOnly ? null : 'setlist_update';
 		}
 		return null;
 	}
@@ -69,6 +85,17 @@ export async function resolveContext(database, collection, entityId, payload = n
 		const row = await database('setlist_participants')
 			.join('setlists', 'setlist_participants.setlists_id', 'setlists.id')
 			.where('setlist_participants.id', entityId)
+			.first('setlists.band as band', 'setlists.id as setlist_id');
+		if (!row) return null;
+		return { bandId: row.band ?? null, entityCollection: 'setlists', entityId: row.setlist_id };
+	}
+	if (collection === 'setlists_songs') {
+		// Same rewrite as setlist_participants above: reported entity is the
+		// parent setlist, so add/remove/override events on one setlist share
+		// the same dedup row.
+		const row = await database('setlists_songs')
+			.join('setlists', 'setlists_songs.setlists_id', 'setlists.id')
+			.where('setlists_songs.id', entityId)
 			.first('setlists.band as band', 'setlists.id as setlist_id');
 		if (!row) return null;
 		return { bandId: row.band ?? null, entityCollection: 'setlists', entityId: row.setlist_id };

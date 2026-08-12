@@ -9,6 +9,14 @@ import { notifyAdmins } from '../shared/notify-admin.js';
 
 const _eventKeysSet = new Set(EVENT_KEYS);
 
+// Junction collections whose row deletion can itself be the meaningful event
+// (removing a song / a participant from a setlist). Deleting the parent
+// entity (a song, a setlist, an album) is out of scope here — that's why this
+// is a small explicit list, not COLLECTIONS_WATCHED. Duplicates the key set
+// of audit-stamp.js's JUNCTION_PARENT_FIELD; not imported from there because
+// audit-stamp.js doesn't export it and is out of scope for this change.
+const JUNCTION_COLLECTIONS = ['setlists_songs', 'setlist_participants'];
+
 // Idempotent schema bootstrap — runs once at extension load.
 // Indexes can't be created via Directus collections API; this is the only path
 // to ensure they exist without external migration tooling. CREATE INDEX
@@ -57,7 +65,7 @@ async function enqueue(database, logger, { eventKey, bandId, entityCollection, e
 	});
 }
 
-export default ({ action }, context) => {
+export default ({ action, filter }, context) => {
 	const { database, logger } = context;
 	const notifyCtx = { services: context.services, database, getSchema: context.getSchema, logger, env: context.env };
 	// Fire-and-forget bootstrap — runs once on extension load.
@@ -110,6 +118,43 @@ export default ({ action }, context) => {
 					collection, keys, actor: accountability?.user,
 				});
 			}
+		});
+	}
+
+	// Delete uses a `filter` hook, not `action`: the delete action meta carries
+	// only `keys` and no item fields, so the parent setlist id is unknowable
+	// once the row is gone. The filter runs pre-delete, where the row still
+	// resolves (same reasoning as audit-stamp.js's delete handling).
+	//
+	// Trade-off: enqueue happens before the delete commits, so a delete that
+	// fails afterward still leaves the event enqueued. Risk is low (deleting a
+	// junction row is a trivial operation) and audit-stamp.js already accepts
+	// the same trade-off for its audit stamp.
+	for (const col of JUNCTION_COLLECTIONS) {
+		filter(`${col}.items.delete`, async (keys, _meta, { accountability }) => {
+			try {
+				const eventKey = mapToEventKey(col, 'delete');
+				if (eventKey) {
+					for (const id of keys ?? []) {
+						const ctx = await resolveContext(database, col, id);
+						if (!ctx || !ctx.bandId) continue;
+						await enqueue(database, logger, {
+							eventKey,
+							bandId: ctx.bandId,
+							entityCollection: ctx.entityCollection,
+							entityId: ctx.entityId,
+							actorId: accountability?.user,
+							payload: null,
+						});
+					}
+				}
+			} catch (err) {
+				logger.warn(`[notif-enqueue] ${col}.delete failed: ${err.message}`);
+				await notifyAdmins(notifyCtx, `spevnik-notifications:enqueue:${col}.delete`, err, {
+					collection: col, keys, actor: accountability?.user,
+				});
+			}
+			return keys;
 		});
 	}
 };

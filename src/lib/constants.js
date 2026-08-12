@@ -8,7 +8,7 @@ export const SEND_CONCURRENCY_PUSH = 50;
 export const SEND_CONCURRENCY_EMAIL = 20;
 export const ADVISORY_LOCK_KEY = 8273918273;
 
-export const COLLECTIONS_WATCHED = ['songs', 'setlists', 'albums', 'setlist_participants'];
+export const COLLECTIONS_WATCHED = ['songs', 'setlists', 'albums', 'setlist_participants', 'setlists_songs'];
 export const CHANNELS = ['push', 'email'];
 
 // Event keys recognized by extension.
