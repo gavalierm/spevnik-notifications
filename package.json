@@ -1,6 +1,6 @@
 {
   "name": "spevnik-notifications",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Spevnik unified notifications — push + email with per-recipient dedup window",
   "type": "module",
   "directus:extension": {

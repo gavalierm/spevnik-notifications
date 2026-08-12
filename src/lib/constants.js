@@ -27,3 +27,24 @@ export const EVENT_KEYS = [
 	'song_create',
 	'song_update',
 ];
+
+// Event classification — used by BOTH collapse (worker.js krok 2, per-batch) a
+// dedup (worker.js krok 4 + dedup.js, 30-min okno naprieč behmi). Musia zdieľať
+// presne tento istý výpočet, inak sa vrstvy rozídu: napr. "Nový setlist" (content)
+// by mohol dedup-om umlčať nasledujúcu "Pozvánku" (attendance), hoci ide o
+// sémanticky odlišné správy pre (potenciálne) rôznych ľudí. Pozri "Dedup contract"
+// v docs/superpowers/specs/2026-05-10-notifications-extension-design.md.
+export const EVENT_CLASS = {
+	setlist_create: 'content',
+	setlist_update: 'content',
+	song_create: 'content',
+	song_update: 'content',
+	album_create: 'content',
+	band_create: 'content',
+	setlist_attendance_invited: 'attendance',
+	setlist_attendance_responded: 'attendance',
+};
+
+export function classifyEvent(eventKey) {
+	return EVENT_CLASS[eventKey] ?? 'content';
+}

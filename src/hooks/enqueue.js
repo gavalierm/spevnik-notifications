@@ -19,7 +19,13 @@ async function ensureSchema(database, logger) {
 	_schemaEnsured = true;
 	const statements = [
 		"CREATE INDEX IF NOT EXISTS idx_notif_events_unprocessed ON notification_events (created_at) WHERE processed_at IS NULL",
+		// idx_notif_sent_dedup: pôvodný dedup kľúč (bez event_class). Dedup query
+		// (lib/dedup.js filterByDedup) teraz filtruje aj cez event_class, takže
+		// query planner uprednostní idx_notif_sent_dedup_class nižšie. Ponechané
+		// bez DROP — mazanie indexu je zbytočné riziko a nič to nestojí, kým
+		// idx_notif_sent_dedup_class existuje ako plnohodnotná náhrada.
 		"CREATE INDEX IF NOT EXISTS idx_notif_sent_dedup ON notification_sent_log (user_id, band_id, entity_collection, entity_id, channel, sent_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_notif_sent_dedup_class ON notification_sent_log (user_id, band_id, entity_collection, entity_id, event_class, channel, sent_at DESC)",
 		"CREATE INDEX IF NOT EXISTS idx_directus_users_notifications_gin ON directus_users USING GIN ((settings::jsonb -> 'notifications' -> 'bands'))",
 	];
 	for (const sql of statements) {

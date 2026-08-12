@@ -10,7 +10,7 @@ import { sendEmailBatch } from '../lib/senders/email.js';
 import { buildPushPayload } from '../lib/templates/push.js';
 import { buildEmailPayload } from '../lib/templates/email.js';
 import { pruneOldEvents, pruneOldSentLog } from '../lib/prune.js';
-import { WORKER_BATCH_LIMIT, CHANNELS, COLLECTIONS_WATCHED } from '../lib/constants.js';
+import { WORKER_BATCH_LIMIT, CHANNELS, COLLECTIONS_WATCHED, classifyEvent } from '../lib/constants.js';
 import { notifyAdmins } from '../shared/notify-admin.js';
 
 export default {
@@ -59,16 +59,10 @@ export default {
 				// kým update sa pri ďalšej zmene zopakuje. Zodpovedá "Príklad 1" v design
 				// spec-e (docs/superpowers/specs/2026-05-10-notifications-extension-design.md):
 				// "pridá setlistA → SEND, upraví setlistA → SKIP".
-				const EVENT_CLASS = {
-					setlist_create: 'content',
-					setlist_update: 'content',
-					song_create: 'content',
-					song_update: 'content',
-					album_create: 'content',
-					band_create: 'content',
-					setlist_attendance_invited: 'attendance',
-					setlist_attendance_responded: 'attendance',
-				};
+				// Trieda sa počíta cez classifyEvent() (constants.js) — zdieľané s dedup
+				// vrstvou (krok 4 + lib/dedup.js), aby sa vzájomne nerozišli. Počíta sa tu
+				// raz a ukladá na reprezentanta ako event_class; krok 3 aj krok 4 ho čítajú
+				// z ev.event_class namiesto opätovného výpočtu.
 				const EVENT_PRIORITY = {
 					setlist_attendance_responded: 10,
 					setlist_attendance_invited: 9,
@@ -81,19 +75,19 @@ export default {
 				};
 				const latestByKey = new Map();
 				for (const ev of events) {
-					const cls = EVENT_CLASS[ev.event_key] ?? 'content';
+					const cls = classifyEvent(ev.event_key);
 					const k = `${ev.band_id}|${ev.entity_collection}|${ev.entity_id}|${cls}`;
 					const prev = latestByKey.get(k);
 					if (!prev) {
-						latestByKey.set(k, ev);
+						latestByKey.set(k, { ...ev, event_class: cls });
 						continue;
 					}
 					const prevP = EVENT_PRIORITY[prev.event_key] ?? 0;
 					const newP = EVENT_PRIORITY[ev.event_key] ?? 0;
 					if (newP > prevP) {
-						latestByKey.set(k, ev);
+						latestByKey.set(k, { ...ev, event_class: cls });
 					} else if (newP === prevP && new Date(ev.created_at).getTime() > new Date(prev.created_at).getTime()) {
-						latestByKey.set(k, ev);
+						latestByKey.set(k, { ...ev, event_class: cls });
 					}
 				}
 				const keep = [...latestByKey.values()];
@@ -191,6 +185,7 @@ export default {
 										band_id: ev.band_id,
 										entity_collection: ev.entity_collection,
 										entity_id: ev.entity_id,
+										event_class: ev.event_class,
 										channel: 'push',
 										_send: { device: dev, payload },
 									});
@@ -202,6 +197,7 @@ export default {
 									band_id: ev.band_id,
 									entity_collection: ev.entity_collection,
 									entity_id: ev.entity_id,
+									event_class: ev.event_class,
 									channel: 'email',
 									_send: { email: r.email, payload },
 								});
@@ -214,42 +210,42 @@ export default {
 				const passedDedup = await filterByDedup(trx, candidates.map(c => ({
 					user_id: c.user_id, band_id: c.band_id,
 					entity_collection: c.entity_collection, entity_id: c.entity_id,
-					channel: c.channel,
+					event_class: c.event_class, channel: c.channel,
 				})));
 
-				const passedKeys = new Set(passedDedup.map(p => `${p.user_id}|${p.band_id}|${p.entity_collection}|${p.entity_id}|${p.channel}`));
+				const passedKeys = new Set(passedDedup.map(p => `${p.user_id}|${p.band_id}|${p.entity_collection}|${p.entity_id}|${p.event_class}|${p.channel}`));
 				const sendable = candidates.filter(c =>
-					passedKeys.has(`${c.user_id}|${c.band_id}|${c.entity_collection}|${c.entity_id}|${c.channel}`)
+					passedKeys.has(`${c.user_id}|${c.band_id}|${c.entity_collection}|${c.entity_id}|${c.event_class}|${c.channel}`)
 				);
 
 				// Within sendable: collapse multiple-devices-per-user-per-channel for dedup write.
 				const seenLogKeys = new Set();
 				const logEntries = [];
 				for (const s of sendable) {
-					const k = `${s.user_id}|${s.band_id}|${s.entity_collection}|${s.entity_id}|${s.channel}`;
+					const k = `${s.user_id}|${s.band_id}|${s.entity_collection}|${s.entity_id}|${s.event_class}|${s.channel}`;
 					if (seenLogKeys.has(k)) continue;
 					seenLogKeys.add(k);
 					logEntries.push({
 						user_id: s.user_id, band_id: s.band_id,
 						entity_collection: s.entity_collection, entity_id: s.entity_id,
-						channel: s.channel,
+						event_class: s.event_class, channel: s.channel,
 					});
 				}
 
 				// 5. Send
-				// channel field MUSÍ zostať v sendItems — sender vracia delivered unchanged
-				// a step 6 (deliveredUserKeys) skladá Set key cez d.channel. Bez neho key
-				// obsahuje 'undefined' a finalLog filter zhodí všetky entries → 0 INSERT-ov.
+				// channel a event_class MUSIA zostať v sendItems — sender vracia delivered
+				// unchanged a step 6 (deliveredUserKeys) skladá Set key cez d.channel/d.event_class.
+				// Bez nich key obsahuje 'undefined' a finalLog filter zhodí všetky entries → 0 INSERT-ov.
 				const pushItems = sendable.filter(s => s.channel === 'push').map(s => ({
 					user_id: s.user_id, band_id: s.band_id,
 					entity_collection: s.entity_collection, entity_id: s.entity_id,
-					channel: 'push',
+					event_class: s.event_class, channel: 'push',
 					device: s._send.device, payload: s._send.payload,
 				}));
 				const emailItems = sendable.filter(s => s.channel === 'email').map(s => ({
 					user_id: s.user_id, band_id: s.band_id,
 					entity_collection: s.entity_collection, entity_id: s.entity_id,
-					channel: 'email',
+					event_class: s.event_class, channel: 'email',
 					email: s._send.email, payload: s._send.payload,
 				}));
 
@@ -259,10 +255,10 @@ export default {
 				// 6. Write sent_log only for users who had at least one delivered send per channel.
 				const deliveredUserKeys = new Set();
 				for (const d of [...pushResult.delivered, ...emailResult.delivered]) {
-					deliveredUserKeys.add(`${d.user_id}|${d.band_id}|${d.entity_collection}|${d.entity_id}|${d.channel}`);
+					deliveredUserKeys.add(`${d.user_id}|${d.band_id}|${d.entity_collection}|${d.entity_id}|${d.event_class}|${d.channel}`);
 				}
 				const finalLog = logEntries.filter(l =>
-					deliveredUserKeys.has(`${l.user_id}|${l.band_id}|${l.entity_collection}|${l.entity_id}|${l.channel}`)
+					deliveredUserKeys.has(`${l.user_id}|${l.band_id}|${l.entity_collection}|${l.entity_id}|${l.event_class}|${l.channel}`)
 				);
 				await writeSentLog(trx, finalLog);
 
