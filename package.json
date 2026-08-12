@@ -1,6 +1,6 @@
 {
   "name": "spevnik-notifications",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Spevnik unified notifications — push + email with per-recipient dedup window",
   "type": "module",
   "directus:extension": {
@@ -11,6 +11,7 @@
     },
     "entries": [
       { "type": "hook", "name": "enqueue", "source": "src/hooks/enqueue.js" },
+      { "type": "hook", "name": "audit-stamp", "source": "src/hooks/audit-stamp.js" },
       {
         "type": "operation",
         "name": "worker",
