@@ -50,19 +50,39 @@ export default {
 				// Motivácia: SPA pri RSVP toggle PATCH-uje aj parent setlists/<id> s
 				// re-sent field-mi (napr. {title: "..."}). Bez priority by phantom
 				// setlist_update zhodil reálne setlist_attendance_responded.
+				// Collapse trieda — eventy rôznych tried sú sémanticky odlišné správy pre
+				// (potenciálne) rôznych ľudí, takže sa nesmú navzájom prebiť: "Nový setlist"
+				// ide celej kapele, "Pozvánka" je actionable pre pozvaného.
+				//
+				// V rámci triedy 'content' vyhráva *_create nad *_update, lebo create je
+				// jednorazová udalosť — keď ju collapse zahodí, informácia je nenávratne preč,
+				// kým update sa pri ďalšej zmene zopakuje. Zodpovedá "Príklad 1" v design
+				// spec-e (docs/superpowers/specs/2026-05-10-notifications-extension-design.md):
+				// "pridá setlistA → SEND, upraví setlistA → SKIP".
+				const EVENT_CLASS = {
+					setlist_create: 'content',
+					setlist_update: 'content',
+					song_create: 'content',
+					song_update: 'content',
+					album_create: 'content',
+					band_create: 'content',
+					setlist_attendance_invited: 'attendance',
+					setlist_attendance_responded: 'attendance',
+				};
 				const EVENT_PRIORITY = {
 					setlist_attendance_responded: 10,
 					setlist_attendance_invited: 9,
+					setlist_create: 6,
+					song_create: 6,
+					album_create: 6,
+					band_create: 6,
 					setlist_update: 5,
 					song_update: 5,
-					setlist_create: 4,
-					song_create: 4,
-					album_create: 4,
-					band_create: 4,
 				};
 				const latestByKey = new Map();
 				for (const ev of events) {
-					const k = `${ev.band_id}|${ev.entity_collection}|${ev.entity_id}`;
+					const cls = EVENT_CLASS[ev.event_key] ?? 'content';
+					const k = `${ev.band_id}|${ev.entity_collection}|${ev.entity_id}|${cls}`;
 					const prev = latestByKey.get(k);
 					if (!prev) {
 						latestByKey.set(k, ev);
