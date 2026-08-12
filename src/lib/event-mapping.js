@@ -42,10 +42,13 @@ export function mapToEventKey(collection, op, payload = null) {
 			// each junction row with a bare {sort} (Directus batch-array update may
 			// echo the primary key back as {sort, id}) — cosmetic only, must not
 			// notify. Any other key present (key_override, bpm_override, note,
-			// songs_id, ...) is a real content change to the junction row.
+			// songs_id, ...) is a real content change to the junction row. An empty
+			// payload ({}) means no field changed at all — Array.every() on an empty
+			// array is vacuously true, so it falls into the same "nothing meaningful
+			// happened" bucket as a bare {sort}/{sort,id} and must not notify either.
 			const REORDER_ONLY_KEYS = new Set(['sort', 'id']);
 			const keys = payload ? Object.keys(payload) : [];
-			const isReorderOnly = keys.length > 0 && keys.every(k => REORDER_ONLY_KEYS.has(k));
+			const isReorderOnly = keys.every(k => REORDER_ONLY_KEYS.has(k));
 			return isReorderOnly ? null : 'setlist_update';
 		}
 		return null;
