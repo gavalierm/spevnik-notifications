@@ -22,6 +22,11 @@ export const CHANNELS = ['push', 'email'];
 // _send payload). 'inapp' neprechádza ani jedným z tých krokov: nič neodosiela,
 // ignoruje per-kanálové preferencie a vzniká pre každého príjemcu, ktorý prejde
 // ACL. Žije mimo tej slučky (worker.js krok 3).
+//
+// SYNC INVARIANT: keep in lockstep s lokálnou konštantou INAPP_CHANNEL v
+// spevnik/src/lib/api/queries/notifications.js (samostatné repo). Drift je
+// tichý — žiadna chyba, žiadny warning: SPA query filtruje na reťazec, ktorý
+// tento worker nikdy nezapíše, a badge natrvalo ukazuje 0.
 export const INAPP_CHANNEL = 'inapp';
 
 // Event keys recognized by extension.
