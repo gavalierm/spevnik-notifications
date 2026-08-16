@@ -13,8 +13,10 @@ import { DEDUP_WINDOW_MIN } from './constants.js';
  * sent_log riadky zapísané pred zavedením event_class majú tento stĺpec NULL.
  * Bežná SQL rovnosť (`s.event_class = i.event_class`) s NULL nikdy nevyhodnotí
  * true, takže staré NULL riadky nikoho neblokujú — najhorší dôsledok je jeden
- * navyše odoslaný push/email, kým sa NULL riadok o max. 60 min nepreč (pozri
- * pruneOldSentLog). Zámerne bez COALESCE — menšie riziko než falošné zhody.
+ * navyše odoslaný push/email. Pred 2026-08-16 sa taký riadok prečistil do 60 min;
+ * po predĺžení retencie na 14 dní (PRUNE_SENT_LOG_MIN) už nie — praktický dopad je
+ * však nulový, lebo event_class sa zapisuje od 2026-08-12 a všetky staršie NULL
+ * riadky boli dávno prune-nuté. Zámerne bez COALESCE — menšie riziko než falošné zhody.
  *
  * Implementation: composite IN list cez Postgres VALUES + JOIN, plne parametrizované
  * (žiadne string-interpolated SQL). Index idx_notif_sent_dedup_class pokrýva lookup.

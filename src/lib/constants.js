@@ -2,7 +2,13 @@
 
 export const DEDUP_WINDOW_MIN = 30;
 export const PRUNE_EVENTS_DAYS = 30;
-export const PRUNE_SENT_LOG_MIN = 60;
+// Retencia sent_log. NEZÁVISLÁ od DEDUP_WINDOW_MIN — dedup pozerá výhradne na
+// riadky s sent_at > NOW() - DEDUP_WINDOW_MIN (dedup.js), takže staršie riadky
+// neblokujú nič bez ohľadu na to, ako dlho tu ležia.
+// 14 dní: (a) okno pre in-app badge počítadlo v SPA (channel 'inapp'),
+// (b) trvalý delivery log pre diagnostiku "nechodia mi notifikácie".
+// Objem: ~3 400 riadkov mesačne pri súčasnej prevádzke.
+export const PRUNE_SENT_LOG_MIN = 20160;
 export const WORKER_BATCH_LIMIT = 500;
 export const SEND_CONCURRENCY_PUSH = 50;
 export const SEND_CONCURRENCY_EMAIL = 20;
@@ -10,6 +16,13 @@ export const ADVISORY_LOCK_KEY = 8273918273;
 
 export const COLLECTIONS_WATCHED = ['songs', 'setlists', 'albums', 'setlist_participants', 'setlists_songs'];
 export const CHANNELS = ['push', 'email'];
+
+// In-app kanál — NIE je v CHANNELS zámerne. CHANNELS je pole, cez ktoré worker
+// iteruje pri stavaní odosielacích kandidátov (shouldNotify → device/email check →
+// _send payload). 'inapp' neprechádza ani jedným z tých krokov: nič neodosiela,
+// ignoruje per-kanálové preferencie a vzniká pre každého príjemcu, ktorý prejde
+// ACL. Žije mimo tej slučky (worker.js krok 3).
+export const INAPP_CHANNEL = 'inapp';
 
 // Event keys recognized by extension.
 // - SPA keys (mirror of spevnik/src/lib/notifications/events.js EVENT_KEYS) —
