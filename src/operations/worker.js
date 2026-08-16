@@ -4,7 +4,7 @@
 import { acquireLock } from '../lib/lock.js';
 import { loadRecipientsForBand } from '../lib/recipients.js';
 import { filterByDedup, writeSentLog } from '../lib/dedup.js';
-import { shouldNotify } from '../lib/notif.js';
+import { shouldNotify, isEventApplicable } from '../lib/notif.js';
 import { sendPushBatch } from '../lib/senders/push.js';
 import { sendEmailBatch } from '../lib/senders/email.js';
 import { buildPushPayload } from '../lib/templates/push.js';
@@ -168,20 +168,27 @@ export default {
 						// Skip aktor — user nemá dostávať notif o vlastnej akcii.
 						if (r.id === ev.actor_id) continue;
 
-						// In-app kandidát — vzniká pre KAŽDÉHO príjemcu, ktorý prešiel ACL
-						// (= je v loadRecipientsForBand pre túto kapelu) a nie je aktorom.
+						// In-app kandidát — vzniká pre príjemcu, ktorého rola daný event vôbec
+						// zahŕňa (isEventApplicable), nezávisle od kanálových preferencií.
 						// Zámerne bez shouldNotify(): kto má push aj email vypnutý, by inak
 						// mal badge natrvalo na nule — teda presne ten, pre koho je in-app
-						// indikátor určený. Neodosiela sa nikam (nemá _send), prechádza však
-						// rovnakým dedupom ako ostatné kanály (vlastný 30-min kľúč).
-						candidates.push({
-							user_id: r.id,
-							band_id: ev.band_id,
-							entity_collection: ev.entity_collection,
-							entity_id: ev.entity_id,
-							event_class: ev.event_class,
-							channel: INAPP_CHANNEL,
-						});
+						// indikátor určený. Rolový rozsah sa ale rešpektovať MUSÍ: recipients
+						// z loadRecipientsForBand zahŕňajú aj public followerov, ktorých seed
+						// pokrýva len FOLLOWER_EVENTS (setlist_create, song_create) — bez tohto
+						// gate-u by follower dostal badge aj za eventy mimo svojej roly
+						// (setlist_update, setlist_attendance_*), o ktorých by ho inak žiadny
+						// kanál nikdy neinformoval. Neodosiela sa nikam (nemá _send), prechádza
+						// však rovnakým dedupom ako ostatné kanály (vlastný 30-min kľúč).
+						if (isEventApplicable(r.notifications, ev.band_id, ev.event_key)) {
+							candidates.push({
+								user_id: r.id,
+								band_id: ev.band_id,
+								entity_collection: ev.entity_collection,
+								entity_id: ev.entity_id,
+								event_class: ev.event_class,
+								channel: INAPP_CHANNEL,
+							});
+						}
 
 						for (const channel of CHANNELS) {
 							// SPA channel naming: 'device' (push), 'email' (email).
