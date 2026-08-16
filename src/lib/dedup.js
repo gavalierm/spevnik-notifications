@@ -81,6 +81,11 @@ export async function writeSentLog(database, delivered) {
 		entity_id: d.entity_id,
 		event_class: d.event_class,
 		channel: d.channel,
+		// Hotový push payload — vypĺňa sa len pre in-app kanál, ktorý ho zobrazuje
+		// v žurnáli. Push/email ho v tejto tabuľke nepotrebujú (už odišli).
+		title: d.title ?? null,
+		body: d.body ?? null,
+		url: d.url ?? null,
 		sent_at: now,
 	}));
 	// Knex chunks by default; explicit chunk if dataset large.

@@ -5,10 +5,10 @@ export const PRUNE_EVENTS_DAYS = 30;
 // Retencia sent_log. NEZÁVISLÁ od DEDUP_WINDOW_MIN — dedup pozerá výhradne na
 // riadky s sent_at > NOW() - DEDUP_WINDOW_MIN (dedup.js), takže staršie riadky
 // neblokujú nič bez ohľadu na to, ako dlho tu ležia.
-// 14 dní: (a) okno pre in-app badge počítadlo v SPA (channel 'inapp'),
-// (b) trvalý delivery log pre diagnostiku "nechodia mi notifikácie".
-// Objem: ~3 400 riadkov mesačne pri súčasnej prevádzke.
-export const PRUNE_SENT_LOG_MIN = 20160;
+// 7 dní: okno pre in-app badge aj pre notifikačný žurnál v SPA (zobrazuje
+// posledných 30 položiek). Kratšie okno = menší delivery log pre diagnostiku,
+// vedomý kompromis operátora 2026-08-16.
+export const PRUNE_SENT_LOG_MIN = 10080;
 export const WORKER_BATCH_LIMIT = 500;
 export const SEND_CONCURRENCY_PUSH = 50;
 export const SEND_CONCURRENCY_EMAIL = 20;

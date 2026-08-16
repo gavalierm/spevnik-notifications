@@ -180,6 +180,12 @@ export default {
 						// kanál nikdy neinformoval. Neodosiela sa nikam (nemá _send), prechádza
 						// však rovnakým dedupom ako ostatné kanály (vlastný 30-min kľúč).
 						if (isEventApplicable(r.notifications, ev.band_id, ev.event_key)) {
+							// Payload sa stavia aj pre in-app, hoci sa nikam neodosiela — uloží sa
+							// do sent_log a SPA ho vypíše v notifikačnom žurnáli. Vďaka tomu je
+							// žurnál presne to isté, čo dostal push, bez druhej implementácie
+							// textov v SPA. buildPushPayload je čistá funkcia nad už načítanými
+							// dátami (band, entity, extraCtx), takže to nestojí ďalší dotaz.
+							const inappPayload = buildPushPayload(ev.event_key, band, entity, extraCtx);
 							candidates.push({
 								user_id: r.id,
 								band_id: ev.band_id,
@@ -187,6 +193,9 @@ export default {
 								entity_id: ev.entity_id,
 								event_class: ev.event_class,
 								channel: INAPP_CHANNEL,
+								title: inappPayload.title,
+								body: inappPayload.body,
+								url: inappPayload.url,
 							});
 						}
 
@@ -251,6 +260,7 @@ export default {
 						user_id: s.user_id, band_id: s.band_id,
 						entity_collection: s.entity_collection, entity_id: s.entity_id,
 						event_class: s.event_class, channel: s.channel,
+						title: s.title ?? null, body: s.body ?? null, url: s.url ?? null,
 					});
 				}
 
