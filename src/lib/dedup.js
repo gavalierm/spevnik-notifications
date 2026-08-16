@@ -83,9 +83,19 @@ export async function writeSentLog(database, delivered) {
 		channel: d.channel,
 		// Hotový push payload — vypĺňa sa len pre in-app kanál, ktorý ho zobrazuje
 		// v žurnáli. Push/email ho v tejto tabuľke nepotrebujú (už odišli).
-		title: d.title ?? null,
-		body: d.body ?? null,
-		url: d.url ?? null,
+		// Orezané na 255 znakov: stĺpce sú varchar(255), ale body sa v
+		// templates/push.js skladá konkatenáciou dvoch nezávislých title polí
+		// (napr. entity.title + band.title), z ktorých každé smie mať samo
+		// osebe až 255 znakov — teoreticky teda vznikne reťazec dlhší, než
+		// stĺpec unesie. Jeden pretečený riadok by zhodil celý bulk INSERT
+		// nižšie (push, email aj in-app idú v jednom insert-e), čo cez
+		// rollback celej worker transakcie vedie k duplicitnému odoslaniu
+		// push/email, ktoré už reálne odišli (pozri Fix round 1 v
+		// task-2-report.md). Orezanie je pre žurnál prijateľné — je to
+		// zobrazovací text, nie dáta.
+		title: d.title ? d.title.slice(0, 255) : null,
+		body: d.body ? d.body.slice(0, 255) : null,
+		url: d.url ? d.url.slice(0, 255) : null,
 		sent_at: now,
 	}));
 	// Knex chunks by default; explicit chunk if dataset large.
