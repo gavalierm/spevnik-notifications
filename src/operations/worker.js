@@ -164,6 +164,11 @@ export default {
 						recipientsCache.set(ev.band_id, recipients);
 					}
 
+					// buildPushPayload je čistá funkcia nad band/entity/extraCtx, ktoré sú v
+					// tomto bode už hotové a od príjemcu nezávisia — stavia sa raz za event,
+					// nie 2x za príjemcu (in-app + push vetva nižšie), takže to nestojí ďalší dotaz.
+					const pushPayload = buildPushPayload(ev.event_key, band, entity, extraCtx);
+
 					for (const r of recipients) {
 						// Skip aktor — user nemá dostávať notif o vlastnej akcii.
 						if (r.id === ev.actor_id) continue;
@@ -180,12 +185,9 @@ export default {
 						// kanál nikdy neinformoval. Neodosiela sa nikam (nemá _send), prechádza
 						// však rovnakým dedupom ako ostatné kanály (vlastný 30-min kľúč).
 						if (isEventApplicable(r.notifications, ev.band_id, ev.event_key)) {
-							// Payload sa stavia aj pre in-app, hoci sa nikam neodosiela — uloží sa
-							// do sent_log a SPA ho vypíše v notifikačnom žurnáli. Vďaka tomu je
-							// žurnál presne to isté, čo dostal push, bez druhej implementácie
-							// textov v SPA. buildPushPayload je čistá funkcia nad už načítanými
-							// dátami (band, entity, extraCtx), takže to nestojí ďalší dotaz.
-							const inappPayload = buildPushPayload(ev.event_key, band, entity, extraCtx);
+							// Uloží sa do sent_log a SPA ho vypíše v notifikačnom žurnáli. Vďaka
+							// tomu je žurnál presne to isté, čo dostal push, bez druhej
+							// implementácie textov v SPA.
 							candidates.push({
 								user_id: r.id,
 								band_id: ev.band_id,
@@ -193,9 +195,9 @@ export default {
 								entity_id: ev.entity_id,
 								event_class: ev.event_class,
 								channel: INAPP_CHANNEL,
-								title: inappPayload.title,
-								body: inappPayload.body,
-								url: inappPayload.url,
+								title: pushPayload.title,
+								body: pushPayload.body,
+								url: pushPayload.url,
 							});
 						}
 
@@ -209,7 +211,6 @@ export default {
 
 							// Build per-channel send items
 							if (channel === 'push') {
-								const payload = buildPushPayload(ev.event_key, band, entity, extraCtx);
 								for (const dev of r.devices) {
 									candidates.push({
 										user_id: r.id,
@@ -218,7 +219,7 @@ export default {
 										entity_id: ev.entity_id,
 										event_class: ev.event_class,
 										channel: 'push',
-										_send: { device: dev, payload },
+										_send: { device: dev, payload: pushPayload },
 									});
 								}
 							} else {

@@ -14,7 +14,7 @@ import { DEDUP_WINDOW_MIN } from './constants.js';
  * Bežná SQL rovnosť (`s.event_class = i.event_class`) s NULL nikdy nevyhodnotí
  * true, takže staré NULL riadky nikoho neblokujú — najhorší dôsledok je jeden
  * navyše odoslaný push/email. Pred 2026-08-16 sa taký riadok prečistil do 60 min;
- * po predĺžení retencie na 14 dní (PRUNE_SENT_LOG_MIN) už nie — praktický dopad je
+ * po predĺžení retencie na 7 dní (PRUNE_SENT_LOG_MIN) už nie — praktický dopad je
  * však nulový, lebo event_class sa zapisuje od 2026-08-12 a všetky staršie NULL
  * riadky boli dávno prune-nuté. Zámerne bez COALESCE — menšie riziko než falošné zhody.
  *
@@ -69,7 +69,8 @@ export async function filterByDedup(database, candidates) {
  * Bulk INSERT do sent_log po úspešnom send-e.
  *
  * @param {import('knex').Knex} database
- * @param {Array<{user_id, band_id, entity_collection, entity_id, event_class, channel}>} delivered
+ * @param {Array<{user_id, band_id, entity_collection, entity_id, event_class, channel, title?, body?, url?}>} delivered
+ *   title/body/url sú hotový push payload — vyplnené len pre kanál 'inapp' (žurnál v SPA); push/email ich nepotrebujú.
  */
 export async function writeSentLog(database, delivered) {
 	if (!delivered.length) return;

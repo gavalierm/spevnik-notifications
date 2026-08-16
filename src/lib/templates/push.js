@@ -61,6 +61,9 @@ function entityUrl(entity, ctx) {
 	if (col === 'setlists') return `/setlists/${entity.id}`;
 	if (col === 'albums') return `/explore/albums/${entity.id}`;
 	if (col === 'bands') return `/explore/bands/${entity.id}`;
+	// Nedosiahnuteľné dnes — entity_collection je vždy jedna zo 4 vetiev vyššie
+	// (COLLECTIONS_WATCHED). Ak pribudne nová sledovaná kolekcia bez vlastnej
+	// vetvy tu, žurnál by ponúkol preklik na route, ktorá v SPA neexistuje (404).
 	return '/notifications';
 }
 
