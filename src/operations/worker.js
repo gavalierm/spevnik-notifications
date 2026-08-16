@@ -10,7 +10,7 @@ import { sendEmailBatch } from '../lib/senders/email.js';
 import { buildPushPayload } from '../lib/templates/push.js';
 import { buildEmailPayload } from '../lib/templates/email.js';
 import { pruneOldEvents, pruneOldSentLog } from '../lib/prune.js';
-import { WORKER_BATCH_LIMIT, CHANNELS, COLLECTIONS_WATCHED, classifyEvent } from '../lib/constants.js';
+import { WORKER_BATCH_LIMIT, CHANNELS, INAPP_CHANNEL, COLLECTIONS_WATCHED, classifyEvent } from '../lib/constants.js';
 import { notifyAdmins } from '../shared/notify-admin.js';
 
 export default {
@@ -168,6 +168,21 @@ export default {
 						// Skip aktor — user nemá dostávať notif o vlastnej akcii.
 						if (r.id === ev.actor_id) continue;
 
+						// In-app kandidát — vzniká pre KAŽDÉHO príjemcu, ktorý prešiel ACL
+						// (= je v loadRecipientsForBand pre túto kapelu) a nie je aktorom.
+						// Zámerne bez shouldNotify(): kto má push aj email vypnutý, by inak
+						// mal badge natrvalo na nule — teda presne ten, pre koho je in-app
+						// indikátor určený. Neodosiela sa nikam (nemá _send), prechádza však
+						// rovnakým dedupom ako ostatné kanály (vlastný 30-min kľúč).
+						candidates.push({
+							user_id: r.id,
+							band_id: ev.band_id,
+							entity_collection: ev.entity_collection,
+							entity_id: ev.entity_id,
+							event_class: ev.event_class,
+							channel: INAPP_CHANNEL,
+						});
+
 						for (const channel of CHANNELS) {
 							// SPA channel naming: 'device' (push), 'email' (email).
 							// Extension internal: 'push' / 'email'. Conversion at consumer call.
@@ -257,7 +272,12 @@ export default {
 				for (const d of [...pushResult.delivered, ...emailResult.delivered]) {
 					deliveredUserKeys.add(`${d.user_id}|${d.band_id}|${d.entity_collection}|${d.entity_id}|${d.event_class}|${d.channel}`);
 				}
+				// In-app nemá sender, takže nikdy nebude v deliveredUserKeys — potrebuje
+				// vlastnú cestu do finalLog. deliveredUserKeys filter existuje preto, aby
+				// sa nezapisovali NEÚSPEŠNÉ odoslania; in-app nič neodosiela, takže preň
+				// nemá čo zlyhať. Bez tejto vetvy je badge natrvalo nula a chyba je tichá.
 				const finalLog = logEntries.filter(l =>
+					l.channel === INAPP_CHANNEL ||
 					deliveredUserKeys.has(`${l.user_id}|${l.band_id}|${l.entity_collection}|${l.entity_id}|${l.event_class}|${l.channel}`)
 				);
 				await writeSentLog(trx, finalLog);
@@ -271,13 +291,15 @@ export default {
 				await pruneOldEvents(trx);
 				await pruneOldSentLog(trx);
 
-				logger.info(`[notif-worker] processed=${events.length} kept=${keep.length} push_sent=${pushResult.delivered.length} email_sent=${emailResult.delivered.length} expired=${pushResult.expiredDeviceIds.length}`);
+				const inappLogged = finalLog.filter(l => l.channel === INAPP_CHANNEL).length;
+				logger.info(`[notif-worker] processed=${events.length} kept=${keep.length} push_sent=${pushResult.delivered.length} email_sent=${emailResult.delivered.length} inapp_logged=${inappLogged} expired=${pushResult.expiredDeviceIds.length}`);
 
 				return {
 					processed: events.length,
 					collapsed: events.length - keep.length,
 					push_sent: pushResult.delivered.length,
 					email_sent: emailResult.delivered.length,
+					inapp_logged: inappLogged,
 					expired_devices: pushResult.expiredDeviceIds.length,
 				};
 			} catch (err) {
