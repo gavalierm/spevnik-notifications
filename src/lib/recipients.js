@@ -17,8 +17,10 @@
  *   id: string,
  *   email: string|null,
  *   notifications: object|null,
- *   devices: Array<{id, endpoint, keys_p256dh, keys_auth}>
- * }>>}
+ *   devices: Array<{id, endpoint, keys_p256dh, keys_auth}>,
+ *   isMember: boolean
+ * }>>} isMember = existuje riadok v `access` pre (user, band); `member`/`manager`/`owner`
+ * v tej tabuľke sú viditeľnosti roly (public/unlisted/private/null), nie príznaky členstva.
  */
 export async function loadRecipientsForBand(database, bandId) {
 	const result = await database.raw(`
@@ -26,6 +28,7 @@ export async function loadRecipientsForBand(database, bandId) {
 			u.id,
 			u.email,
 			u.settings::jsonb -> 'notifications' AS notifications,
+			bool_or(a.id IS NOT NULL) AS is_member,
 			COALESCE(
 				json_agg(
 					json_build_object(
@@ -39,15 +42,17 @@ export async function loadRecipientsForBand(database, bandId) {
 			) AS devices
 		FROM directus_users u
 		LEFT JOIN push_subscriptions ps ON ps.user = u.id
+		LEFT JOIN access a ON a.user = u.id AND a.band = ?
 		WHERE jsonb_exists(u.settings::jsonb -> 'notifications' -> 'bands', ?)
 		  AND u.status = 'active'
 		GROUP BY u.id
-	`, [String(bandId)]);
+	`, [bandId, String(bandId)]);
 
 	return result.rows.map(r => ({
 		id: r.id,
 		email: r.email,
 		notifications: r.notifications,
 		devices: r.devices ?? [],
+		isMember: r.is_member === true,
 	}));
 }
