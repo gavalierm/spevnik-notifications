@@ -99,6 +99,8 @@ export default {
 				const entitiesCache = new Map();           // `${collection}|${id}` → row
 				const recipientsCache = new Map();         // bandId → recipients[]
 
+				let gatedNonPublic = 0;                    // visibility gate: koľko kandidátov zachytených (viď krok 3)
+
 				for (const ev of keep) {
 					// Defense-in-depth: validate collection name before using as Knex table.
 					// entity_collection is written by the hook from COLLECTIONS_WATCHED.
@@ -127,11 +129,15 @@ export default {
 					const entKey = `${ev.entity_collection}|${ev.entity_id}`;
 					let entity = entitiesCache.get(entKey);
 					if (!entity) {
+						// status je povinný pre visibility gate nižšie — bez neho by nečlen
+						// dostal notifikáciu aj za private/unlisted/archived obsah.
 						const entityFields = ev.entity_collection === 'setlists'
-							? ['id', 'title', 'date']
-							: ['id', 'title'];
+							? ['id', 'title', 'date', 'status']
+							: ['id', 'title', 'status'];
 						entity = await trx(ev.entity_collection).where('id', ev.entity_id).first(...entityFields).catch(() => null);
-						if (!entity) entity = { id: ev.entity_id, title: '' };
+						// Bez statusu sa entita považuje za neverejnú — fail-safe smerom
+						// k mlčaniu, nie k úniku.
+						if (!entity) entity = { id: ev.entity_id, title: '', status: null };
 						entitiesCache.set(entKey, entity);
 					}
 
@@ -172,6 +178,17 @@ export default {
 					for (const r of recipients) {
 						// Skip aktor — user nemá dostávať notif o vlastnej akcii.
 						if (r.id === ev.actor_id) continue;
+
+						// VISIBILITY GATE — bezpečnostná podmienka, nie preferenčná.
+						// Nečlen kapely (public follower) dostane notifikáciu výhradne za
+						// `public` obsah. Pre unlisted/private/archived by inak dostal názov
+						// entity v tele push správy na lock screen — teda obsah, na ktorý
+						// nemá právo. Overené na produkcii 2026-08-17: 10 riadkov v sent_log
+						// za `unlisted` setlisty, z toho 5 reálne odoslaných push správ.
+						//
+						// Zámerne pred vznikom akéhokoľvek kandidáta, aby platila rovnako
+						// pre push, email aj in-app. Členom sa nemení nič.
+						if (!r.isMember && entity.status !== 'public') { gatedNonPublic++; continue; }
 
 						// In-app kandidát — vzniká pre príjemcu, ktorého rola daný event vôbec
 						// zahŕňa (isEventApplicable), nezávisle od kanálových preferencií.
@@ -310,7 +327,7 @@ export default {
 				await pruneOldSentLog(trx);
 
 				const inappLogged = finalLog.filter(l => l.channel === INAPP_CHANNEL).length;
-				logger.info(`[notif-worker] processed=${events.length} kept=${keep.length} push_sent=${pushResult.delivered.length} email_sent=${emailResult.delivered.length} inapp_logged=${inappLogged} expired=${pushResult.expiredDeviceIds.length}`);
+				logger.info(`[notif-worker] processed=${events.length} kept=${keep.length} push_sent=${pushResult.delivered.length} email_sent=${emailResult.delivered.length} inapp_logged=${inappLogged} gated_non_public=${gatedNonPublic} expired=${pushResult.expiredDeviceIds.length}`);
 
 				return {
 					processed: events.length,
@@ -318,6 +335,7 @@ export default {
 					push_sent: pushResult.delivered.length,
 					email_sent: emailResult.delivered.length,
 					inapp_logged: inappLogged,
+					gated_non_public: gatedNonPublic,
 					expired_devices: pushResult.expiredDeviceIds.length,
 				};
 			} catch (err) {
