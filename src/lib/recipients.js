@@ -9,6 +9,12 @@
 // Note 2: directus_users.settings je `json` (nie `jsonb`) — json nemá equality operator,
 // takže nemôže byť v GROUP BY. Spoliehame sa na PostgreSQL functional dependency:
 // GROUP BY u.id (PK) povoľuje SELECT všetkých u.* stĺpcov bez agregácie.
+//
+// Note 3: is_member sa počíta cez korelovaný EXISTS subquery, NIE cez LEFT JOIN na `access`.
+// Dva nezávislé LEFT JOINy na to isté u.id (ps aj access) by vytvorili cross-product vo FROM
+// klauzule ešte pred GROUP BY — pri používateľovi s viac než jedným `access` riadkom pre tú
+// istú (user, band) dvojicu by sa zariadenia v `devices` duplikovali (json_agg cez nafúknuté
+// riadky). EXISTS je skalárny výraz vyhodnotený per u.id, žiadny JOIN, žiadny cross-product.
 
 /**
  * @param {import('knex').Knex} database
@@ -28,7 +34,7 @@ export async function loadRecipientsForBand(database, bandId) {
 			u.id,
 			u.email,
 			u.settings::jsonb -> 'notifications' AS notifications,
-			bool_or(a.id IS NOT NULL) AS is_member,
+			EXISTS (SELECT 1 FROM access a WHERE a.user = u.id AND a.band = ?) AS is_member,
 			COALESCE(
 				json_agg(
 					json_build_object(
@@ -42,7 +48,6 @@ export async function loadRecipientsForBand(database, bandId) {
 			) AS devices
 		FROM directus_users u
 		LEFT JOIN push_subscriptions ps ON ps.user = u.id
-		LEFT JOIN access a ON a.user = u.id AND a.band = ?
 		WHERE jsonb_exists(u.settings::jsonb -> 'notifications' -> 'bands', ?)
 		  AND u.status = 'active'
 		GROUP BY u.id
