@@ -99,7 +99,7 @@ export default {
 				const entitiesCache = new Map();           // `${collection}|${id}` → row
 				const recipientsCache = new Map();         // bandId → recipients[]
 
-				let gatedNonPublic = 0;                    // visibility gate: koľko kandidátov zachytených (viď krok 3)
+				let gatedNonPublic = 0;                    // visibility gate: koľko dvojíc (event × príjemca) gate zachytil (viď nižšie)
 
 				for (const ev of keep) {
 					// Defense-in-depth: validate collection name before using as Knex table.
@@ -118,7 +118,11 @@ export default {
 					// Lazy load band
 					let band = bandsCache.get(ev.band_id);
 					if (!band) {
-						band = await trx('bands').where('id', ev.band_id).first('id', 'title');
+						// status je povinný pre visibility gate nižšie (rovnako ako pri entite).
+						band = await trx('bands').where('id', ev.band_id).first('id', 'title', 'status');
+						// Band sa nenačítal → celý event sa pre tento band preskočí, teda aj pre
+						// členov — mlčanie, nie únik. Netreba samostatný status:null fallback ako
+						// pri entite, lebo tu sa nižšie neprejde vôbec.
 						if (!band) continue;
 						bandsCache.set(ev.band_id, band);
 					}
@@ -181,14 +185,20 @@ export default {
 
 						// VISIBILITY GATE — bezpečnostná podmienka, nie preferenčná.
 						// Nečlen kapely (public follower) dostane notifikáciu výhradne za
-						// `public` obsah. Pre unlisted/private/archived by inak dostal názov
-						// entity v tele push správy na lock screen — teda obsah, na ktorý
-						// nemá právo. Overené na produkcii 2026-08-17: 10 riadkov v sent_log
+						// `public` obsah `public` kapely. Pre unlisted/private/archived by inak
+						// dostal názov entity v tele push správy na lock screen — teda obsah, na
+						// ktorý nemá právo. Overené na produkcii 2026-08-17: 10 riadkov v sent_log
 						// za `unlisted` setlisty, z toho 5 reálne odoslaných push správ.
+						//
+						// Status entity nestačí: follow záznam vzniká len pri public kapele, ale
+						// keď sa kapela neskôr prepne na unlisted/private/archived, existujúci
+						// follow sa nemaže (SPA syncNotificationBands existujúce záznamy neruší) —
+						// bez kontroly band.status by follower dostával notifikácie za kapelu,
+						// ktorú by cez API už nevidel.
 						//
 						// Zámerne pred vznikom akéhokoľvek kandidáta, aby platila rovnako
 						// pre push, email aj in-app. Členom sa nemení nič.
-						if (!r.isMember && entity.status !== 'public') { gatedNonPublic++; continue; }
+						if (!r.isMember && (entity.status !== 'public' || band.status !== 'public')) { gatedNonPublic++; continue; }
 
 						// In-app kandidát — vzniká pre príjemcu, ktorého rola daný event vôbec
 						// zahŕňa (isEventApplicable), nezávisle od kanálových preferencií.
