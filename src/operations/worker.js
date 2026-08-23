@@ -74,9 +74,29 @@ export default {
 					song_update: 5,
 				};
 				const latestByKey = new Map();
+				// Collapse zahodí všetky eventy skupiny okrem víťaza. Pri pozvánkach je ale
+				// každý zahodený event samostatný pozvaný človek — jeho access_id existuje
+				// len v jeho vlastnom payloade. Bez tejto akumulácie by z dávkového pridania
+				// piatich ľudí dostal notifikáciu jediný (ten, čo prežil collapse), lebo krok 3
+				// cieli výhradne na access_id-čka z reprezentanta.
+				const invitedAccessIdsByKey = new Map();   // collapse key → Set<access_id>
 				for (const ev of events) {
 					const cls = classifyEvent(ev.event_key);
 					const k = `${ev.band_id}|${ev.entity_collection}|${ev.entity_id}|${cls}`;
+
+					if (ev.event_key === 'setlist_attendance_invited') {
+						// payload je `json` stĺpec — pg ho vracia už rozparsovaný. String je
+						// obrana pre riadky zapísané mimo enqueue hooku (manuálny INSERT, iný driver).
+						let pl = ev.payload;
+						if (typeof pl === 'string') { try { pl = JSON.parse(pl); } catch { pl = null; } }
+						const accessId = pl?.access_id;
+						if (accessId) {
+							let s = invitedAccessIdsByKey.get(k);
+							if (!s) { s = new Set(); invitedAccessIdsByKey.set(k, s); }
+							s.add(accessId);
+						}
+					}
+
 					const prev = latestByKey.get(k);
 					if (!prev) {
 						latestByKey.set(k, { ...ev, event_class: cls });
@@ -90,7 +110,12 @@ export default {
 						latestByKey.set(k, { ...ev, event_class: cls });
 					}
 				}
-				const keep = [...latestByKey.values()];
+				const keep = [...latestByKey.values()].map(ev => ({
+					...ev,
+					invited_access_ids: [...(invitedAccessIdsByKey.get(
+						`${ev.band_id}|${ev.entity_collection}|${ev.entity_id}|${ev.event_class}`
+					) ?? [])],
+				}));
 				const allEventIds = events.map(e => e.id);
 
 				// 3. Per-band recipient resolution + content building
@@ -98,8 +123,11 @@ export default {
 				const bandsCache = new Map();              // bandId → row
 				const entitiesCache = new Map();           // `${collection}|${id}` → row
 				const recipientsCache = new Map();         // bandId → recipients[]
+				const participantsCache = new Map();       // setlistId → Set<userId> (obsadenie setlistu)
+				const bandStaffCache = new Map();          // bandId → Set<userId> (manager/owner)
 
 				let gatedNonPublic = 0;                    // visibility gate: koľko dvojíc (event × príjemca) gate zachytil (viď nižšie)
+				let gatedNonParticipant = 0;               // attendance gate: to isté pre obsadenie setlistu (viď nižšie)
 
 				for (const ev of keep) {
 					// Defense-in-depth: validate collection name before using as Knex table.
@@ -174,6 +202,70 @@ export default {
 						recipientsCache.set(ev.band_id, recipients);
 					}
 
+					// ATTENDANCE GATE — množina užívateľov, ktorých sa tento event vôbec týka.
+					// `null` = netýka sa (content event), gate sa neaplikuje.
+					//
+					// Attendance eventy NIE SÚ broadcast celej kapele, hoci ich sem loadRecipientsForBand
+					// takto prináša — ten vracia každého, kto má `settings.notifications.bands[X]`, a
+					// o obsadení setlistu nevie nič. Bez tohto gate-u dostal „Pozvánku" každý člen aj
+					// public follower; overené na produkcii 2026-08-23 na setliste 129: 12 príjemcov,
+					// z toho 5 reálne pozvaných. Spec to definuje jednoznačne — „recipient=participant.user"
+					// (docs/superpowers/specs/2026-05-10-notifications-extension-design.md, §Special case
+					// setlist_participants) — implementácia to nikdy nezrealizovala.
+					//
+					// Dve triedy majú rôzny okruh, lebo nesú rôznu správu:
+					//   invited   → výhradne pozvaný. Je to actionable výzva na RSVP, adresná.
+					//   responded → obsadenie setlistu + manageri/owneri kapely. Text je agregát
+					//               („+4/-0 z 6"), teda stav obsadenia: patrí tomu, kto v setliste hrá,
+					//               a tomu, kto obsadenie rieši. Zodpovedá spec-u §responded aggregation
+					//               („manažér … dostane jednu notifikáciu typu potvrdený X/Y") aj ACL
+					//               matici („iný člen potvrdil účasť").
+					//
+					// Rola sa deteguje `manager IS NOT NULL` / `owner IS NOT NULL` — rovnaká konvencia
+					// ako spevnik/src/lib/auth/auth.svelte.js:95-97. Tie stĺpce sú viditeľnosti roly
+					// (public/unlisted/private), NULL = rolu nemá; hodnota sama je pre nás irelevantná.
+					let attendanceAllowed = null;
+					if (ev.event_class === 'attendance') {
+						let participants = participantsCache.get(ev.entity_id);
+						if (!participants) {
+							const rows = await trx('setlist_participants')
+								.join('access', 'access.id', 'setlist_participants.access_id')
+								.where('setlist_participants.setlists_id', ev.entity_id)
+								.select('access.user as user_id');
+							participants = new Set(rows.map(x => x.user_id).filter(Boolean));
+							participantsCache.set(ev.entity_id, participants);
+						}
+
+						if (ev.event_key === 'setlist_attendance_invited') {
+							// Presné cielenie na práve pozvaných (access_id z payloadov, viď krok 2).
+							// Bez neho by pri každom novom pozvanom dostali „Pozvánku" znova aj tí,
+							// čo v setliste sedia od začiatku — pre nich to nie je nová informácia.
+							const ids = ev.invited_access_ids ?? [];
+							if (ids.length) {
+								const rows = await trx('access').whereIn('id', ids).select('user');
+								attendanceAllowed = new Set(rows.map(x => x.user).filter(Boolean));
+							} else {
+								// Payload bez access_id (eventy spred tejto verzie, manuálny INSERT).
+								// Fallback na obsadenie setlistu: širšie než presné cielenie, stále
+								// nikdy nie celá kapela.
+								attendanceAllowed = new Set(participants);
+							}
+						} else {
+							let staff = bandStaffCache.get(ev.band_id);
+							if (!staff) {
+								const rows = await trx('access')
+									.where('band', ev.band_id)
+									.andWhere(function () {
+										this.whereNotNull('manager').orWhereNotNull('owner');
+									})
+									.select('user');
+								staff = new Set(rows.map(x => x.user).filter(Boolean));
+								bandStaffCache.set(ev.band_id, staff);
+							}
+							attendanceAllowed = new Set([...participants, ...staff]);
+						}
+					}
+
 					// buildPushPayload je čistá funkcia nad band/entity/extraCtx, ktoré sú v
 					// tomto bode už hotové a od príjemcu nezávisia — stavia sa raz za event,
 					// nie 2x za príjemcu (in-app + push vetva nižšie), takže to nestojí ďalší dotaz.
@@ -182,6 +274,12 @@ export default {
 					for (const r of recipients) {
 						// Skip aktor — user nemá dostávať notif o vlastnej akcii.
 						if (r.id === ev.actor_id) continue;
+
+						// Zámerne pred visibility gate aj pred vznikom akéhokoľvek kandidáta:
+						// platí rovnako pre push, email aj in-app (badge/žurnál). Attendance
+						// event sa k nečlenovi nedostane ani teoreticky, takže gatedNonPublic
+						// zostáva vyhradený pre content eventy a obe čísla ostávajú čitateľné.
+						if (attendanceAllowed && !attendanceAllowed.has(r.id)) { gatedNonParticipant++; continue; }
 
 						// VISIBILITY GATE — bezpečnostná podmienka, nie preferenčná.
 						// Nečlen kapely (public follower) dostane notifikáciu výhradne za
@@ -337,7 +435,7 @@ export default {
 				await pruneOldSentLog(trx);
 
 				const inappLogged = finalLog.filter(l => l.channel === INAPP_CHANNEL).length;
-				logger.info(`[notif-worker] processed=${events.length} kept=${keep.length} push_sent=${pushResult.delivered.length} email_sent=${emailResult.delivered.length} inapp_logged=${inappLogged} gated_non_public=${gatedNonPublic} expired=${pushResult.expiredDeviceIds.length}`);
+				logger.info(`[notif-worker] processed=${events.length} kept=${keep.length} push_sent=${pushResult.delivered.length} email_sent=${emailResult.delivered.length} inapp_logged=${inappLogged} gated_non_public=${gatedNonPublic} gated_non_participant=${gatedNonParticipant} expired=${pushResult.expiredDeviceIds.length}`);
 
 				return {
 					processed: events.length,
@@ -346,6 +444,7 @@ export default {
 					email_sent: emailResult.delivered.length,
 					inapp_logged: inappLogged,
 					gated_non_public: gatedNonPublic,
+					gated_non_participant: gatedNonParticipant,
 					expired_devices: pushResult.expiredDeviceIds.length,
 				};
 			} catch (err) {
